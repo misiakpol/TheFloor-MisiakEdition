@@ -13,6 +13,14 @@ extends Window
 
 const SETUP_TAB := 0
 const GAME_TAB := 1
+const STATS_TAB := 2
+const USED_COLOR := Color(0.5, 0.52, 0.62)
+## Kolumny tabeli rankingu: [nagłówek, wyrównanie do prawej?].
+const RANKING_COLUMNS := [
+	["#", true], ["Gracz", false], ["Tytuły", true], ["Pojedynki W/P", true], ["% wygr.", true],
+	["Pola", true], ["Seria", true], ["Poprawne", true], ["Pasy", true], ["Śr. czas", true],
+	["Najszybsza", true], ["Finał (rundy)", true],
+]
 const LOG_TIME_COLOR := "#8a8fb0"
 const ERROR_COLOR := "#ef476f"
 const WARNING_COLOR := Color(1.0, 0.62, 0.62)
@@ -47,7 +55,18 @@ var _synced_player_count := GameManager.MIN_PLAYERS
 @onready var _category_count_label: Label = %CategoryCountLabel
 @onready var _reload_button: Button = %ReloadButton
 @onready var _category_list: ItemList = %CategoryList
+@onready var _final_title: Label = %FinalTitle
+@onready var _final_category_list: ItemList = %FinalCategoryList
+@onready var _final_category_option: OptionButton = %FinalCategoryOption
+@onready var _reset_final_pool_button: Button = %ResetFinalPoolButton
+
+# Statystyki
+@onready var _ranking_tree: Tree = %RankingTree
+@onready var _facts_label: RichTextLabel = %FactsLabel
+@onready var _reset_stats_button: Button = %ResetStatsButton
 ## Szyna AudioManagera -> [suwak, etykieta z %].
+@onready var _duel_time_spin: SpinBox = %DuelTimeSpin
+@onready var _save_settings_button: Button = %SaveSettingsButton
 @onready var _volume_controls: Dictionary = {
 	AudioManager.MUSIC_BUS: [%MusicVolumeSlider, %MusicVolumeValue],
 	AudioManager.SFX_BUS: [%SfxVolumeSlider, %SfxVolumeValue],
@@ -83,6 +102,9 @@ var _synced_player_count := GameManager.MIN_PLAYERS
 func _ready() -> void:
 	_tabs.set_tab_title(SETUP_TAB, "Konfiguracja")
 	_tabs.set_tab_title(GAME_TAB, "Rozgrywka / Pojedynek")
+	_tabs.set_tab_title(STATS_TAB, "Statystyki")
+	_setup_ranking_tree()
+	_refresh_stats()
 	_player_count_spin.min_value = GameManager.MIN_PLAYERS
 	_player_count_spin.max_value = GameManager.MAX_PLAYERS
 
@@ -92,6 +114,7 @@ func _ready() -> void:
 	_pass_button.shortcut = _make_shortcut([KEY_P])
 
 	_setup_volume_sliders()
+	_setup_game_settings()
 	_connect_ui_signals()
 	_connect_manager_signals()
 	_populate_category_views()
@@ -117,6 +140,9 @@ func _connect_ui_signals() -> void:
 	_player_count_spin.value_changed.connect(_on_player_count_changed)
 	_generate_button.pressed.connect(_on_generate_pressed)
 	_reload_button.pressed.connect(CategoryManager.reload)
+	_final_category_option.item_selected.connect(_on_final_category_selected)
+	_reset_final_pool_button.pressed.connect(GameManager.reset_used_final_categories)
+	_reset_stats_button.pressed.connect(_on_reset_stats_pressed)
 	_random_player_button.pressed.connect(GameManager.select_random_player)
 	_duel_button.pressed.connect(_on_duel_pressed)
 	_cancel_button.pressed.connect(_on_cancel_pressed)
@@ -145,6 +171,8 @@ func _connect_manager_signals() -> void:
 	GameManager.duel_penalty_ticked.connect(_update_duel_phase_label.unbind(2))
 	CategoryManager.categories_loaded.connect(_on_categories_loaded)
 	CategoryManager.load_failed.connect(_on_categories_load_failed)
+	GameManager.used_final_categories_changed.connect(_populate_final_categories)
+	StatsManager.stats_changed.connect(_refresh_stats)
 
 
 #region Handlery UI
@@ -331,6 +359,32 @@ func _setup_volume_sliders() -> void:
 		slider.value = AudioManager.get_bus_volume_linear(bus)
 		_on_volume_changed(slider.value, bus)
 		slider.value_changed.connect(_on_volume_changed.bind(bus))
+		slider.value_changed.connect(_mark_settings_dirty.unbind(1))
+
+
+## Czas na odpowiedź + zapis ustawień (wartości wczytane przez SettingsManager przy starcie).
+func _setup_game_settings() -> void:
+	_duel_time_spin.min_value = GameManager.MIN_DUEL_TIME
+	_duel_time_spin.max_value = GameManager.MAX_DUEL_TIME
+	_duel_time_spin.value = GameManager.duel_time
+	_duel_time_spin.value_changed.connect(func(value: float) -> void:
+		GameManager.set_duel_time(value)
+		_mark_settings_dirty()
+	)
+	_save_settings_button.pressed.connect(_on_save_settings_pressed)
+	SettingsManager.settings_saved.connect(
+			func(path: String) -> void: _append_log("Zapisano ustawienia: %s" % path))
+
+
+func _mark_settings_dirty() -> void:
+	_save_settings_button.text = "Zapisz ustawienia *"
+
+
+func _on_save_settings_pressed() -> void:
+	if SettingsManager.save_settings():
+		_save_settings_button.text = "Zapisz ustawienia"
+	else:
+		_on_categories_load_failed("Nie udało się zapisać ustawień – szczegóły w konsoli Godota.")
 
 
 func _populate_player_list() -> void:
@@ -389,6 +443,53 @@ func _populate_category_views() -> void:
 	_category_count_label.text = "Kategorie: %d  (folder %s/)" % [
 		CategoryManager.categories.size(), CategoryManager.CATEGORIES_DIR,
 	]
+	_populate_final_categories()
+
+
+## Podgląd folderu "kategorie final" + ręczny wybór kategorii rundy rozstrzygającej.
+## Lista wyboru: losowa (domyślnie), kategorie finałowe, a na końcu zwykłe – na wszelki wypadek.
+func _populate_final_categories() -> void:
+	_final_category_list.clear()
+	for category in CategoryManager.final_categories:
+		var key: String = category["name"]
+		var index := _final_category_list.add_item("%s — %s" % [
+			CategoryManager.get_display_name(key), CategoryManager.describe_question_count(key),
+		])
+		_final_category_list.set_item_tooltip(index, category["path"])
+		if category["questions"].is_empty():
+			_final_category_list.set_item_custom_fg_color(index, WARNING_COLOR)
+		elif GameManager.is_final_category_used(key):
+			# Zagrana już w tej sesji – nie wejdzie do losowania.
+			_final_category_list.set_item_text(index, "[zużyta] " + _final_category_list.get_item_text(index))
+			_final_category_list.set_item_custom_fg_color(index, USED_COLOR)
+			_final_category_list.set_item_tooltip(index, "Zagrana w tej sesji – pominięta w losowaniu.")
+	var unused_count := GameManager.get_unused_final_categories().size()
+	_final_title.text = "Finałowe (runda 3): %d / %d w puli" % [unused_count, CategoryManager.final_categories.size()]
+	_reset_final_pool_button.disabled = GameManager.used_final_categories.is_empty()
+
+	_final_category_option.clear()
+	_final_category_option.add_item("(losowa z puli: %d niezużytych)" % unused_count)
+	_final_category_option.set_item_metadata(0, "")
+	for key in CategoryManager.get_final_category_keys():
+		_final_category_option.add_item("[finał] %s" % CategoryManager.get_display_name(key))
+		_final_category_option.set_item_metadata(_final_category_option.item_count - 1, key)
+	for category_name in CategoryManager.get_category_names():
+		if not CategoryManager.get_questions(category_name).is_empty():
+			_final_category_option.add_item(category_name)
+			_final_category_option.set_item_metadata(_final_category_option.item_count - 1, category_name)
+
+	# Zachowaj wybór admina (np. po "Skanuj foldery"), jeśli kategoria nadal istnieje.
+	var selected_index := 0
+	for i in _final_category_option.item_count:
+		if str(_final_category_option.get_item_metadata(i)) == GameManager.final_category_override:
+			selected_index = i
+	_final_category_option.select(selected_index)
+	if selected_index == 0 and not GameManager.final_category_override.is_empty():
+		GameManager.set_final_category_override("")
+
+
+func _on_final_category_selected(index: int) -> void:
+	GameManager.set_final_category_override(str(_final_category_option.get_item_metadata(index)))
 
 
 func _get_selected_player_index() -> int:
@@ -507,6 +608,107 @@ func _update_duel_times(times: PackedFloat32Array) -> void:
 		var in_penalty := is_active and GameManager.duel_state == GameManager.DuelState.PENALTY
 		var color := DANGER_COLOR if times[side] <= 0.0 or in_penalty else (ACTIVE_COLOR if is_active else INACTIVE_COLOR)
 		_side_time_labels[side].add_theme_color_override("font_color", color)
+
+#endregion
+
+
+#region Statystyki
+
+func _setup_ranking_tree() -> void:
+	_ranking_tree.columns = RANKING_COLUMNS.size()
+	for i in RANKING_COLUMNS.size():
+		_ranking_tree.set_column_title(i, RANKING_COLUMNS[i][0])
+		_ranking_tree.set_column_expand(i, i == 1) # Rozszerza się tylko kolumna z imieniem.
+		_ranking_tree.set_column_clip_content(i, i == 1)
+		if i == 0:
+			_ranking_tree.set_column_custom_minimum_width(i, 44) # Bez tego "#" ma szerokość 0.
+		if RANKING_COLUMNS[i][1]:
+			_ranking_tree.set_column_title_alignment(i, HORIZONTAL_ALIGNMENT_RIGHT)
+
+
+func _refresh_stats() -> void:
+	_ranking_tree.clear()
+	var root := _ranking_tree.create_item()
+	for entry in StatsManager.get_ranking():
+		var item := _ranking_tree.create_item(root)
+		var values := [
+			str(entry["rank"]),
+			entry["name"],
+			str(entry["titles"]),
+			"%d / %d" % [entry["duels_won"], entry["duels_lost"]],
+			"%d%%" % roundi(entry["win_rate"] * 100.0) if entry["duels"] > 0 else "-",
+			str(entry["tiles_captured"]),
+			str(entry["best_streak"]),
+			str(entry["correct"]),
+			str(entry["passes"]),
+			_format_seconds(entry["avg_answer"]),
+			_format_seconds(entry["fastest"]),
+			str(entry["final_rounds_won"]),
+		]
+		for i in values.size():
+			item.set_text(i, values[i])
+			if RANKING_COLUMNS[i][1]:
+				item.set_text_alignment(i, HORIZONTAL_ALIGNMENT_RIGHT)
+		# Podium: złoto / srebro / brąz.
+		if entry["rank"] <= 3 and (entry["titles"] > 0 or entry["duels_won"] > 0):
+			var medal: Color = [Color("ffd166"), Color("d9dbe8"), Color("e09f6b")][entry["rank"] - 1]
+			for i in values.size():
+				item.set_custom_color(i, medal)
+	_facts_label.text = _build_facts_text()
+
+
+func _build_facts_text() -> String:
+	var s := StatsManager.session
+	if s["games_started"] == 0:
+		return "[color=#8a8fb0]Brak danych – statystyki pojawią się po wygenerowaniu podłogi.[/color]"
+
+	var answers: int = s["correct"] + s["passes"]
+	var lines: PackedStringArray = [
+		"Gry: [b]%d[/b] rozpoczętych, [b]%d[/b] zakończonych  •  Pojedynki: [b]%d[/b]  •  Finały: [b]%d[/b] (rund: %d)" % [
+			s["games_started"], s["games_finished"], s["duels"], s["finals"], s["final_rounds"],
+		],
+		"Odpowiedzi: [b]%d[/b] poprawnych, [b]%d[/b] pasów (%s pasów)  •  Przegrane czasem: [b]%d[/b]" % [
+			s["correct"], s["passes"],
+			"%d%%" % roundi(100.0 * s["passes"] / answers) if answers > 0 else "0%", s["timeouts"],
+		],
+	]
+	var fastest := StatsManager.fastest_answer
+	if not fastest.is_empty():
+		lines.append("Najszybsza odpowiedź: [b]%s[/b] – „%s” w %s (%s)" % [
+			fastest["player"], fastest["answer"], _format_seconds(fastest["seconds"]), fastest["category"],
+		])
+	var slowest := StatsManager.slowest_answer
+	if not slowest.is_empty() and slowest != fastest:
+		lines.append("Najdłuższe zgadywanie: [b]%s[/b] – „%s” po %s (%s)" % [
+			slowest["player"], slowest["answer"], _format_seconds(slowest["seconds"]), slowest["category"],
+		])
+	var category := StatsManager.get_most_played_category()
+	if not category.is_empty():
+		lines.append("Najczęściej grana kategoria: [b]%s[/b] (%d×)" % [category["name"], category["plays"]])
+	var passed := StatsManager.get_most_passed_answer()
+	if not passed.is_empty():
+		lines.append("Najtrudniejsza zagadka (najwięcej pasów): [b]„%s”[/b] (%d×)" % [passed["name"], passed["plays"]])
+	var ranking := StatsManager.get_ranking()
+	if not ranking.is_empty() and (ranking[0]["titles"] > 0 or ranking[0]["duels_won"] > 0):
+		lines.append("[color=#ffd166]Lider sesji: [b]%s[/b][/color]" % ranking[0]["name"])
+	return "\n".join(lines)
+
+
+## "4.2 s" albo "-" dla braku danych (wartość ujemna).
+func _format_seconds(seconds: float) -> String:
+	return "-" if seconds < 0.0 else "%.1f s" % seconds
+
+
+## Statystyk nie da się odtworzyć – wymagamy dwóch kliknięć w ciągu 3 s.
+func _on_reset_stats_pressed() -> void:
+	if _reset_stats_button.text != "Na pewno? Kliknij ponownie":
+		_reset_stats_button.text = "Na pewno? Kliknij ponownie"
+		get_tree().create_timer(3.0).timeout.connect(
+				func() -> void: _reset_stats_button.text = "Wyczyść statystyki")
+		return
+	_reset_stats_button.text = "Wyczyść statystyki"
+	StatsManager.reset()
+	_append_log("Wyczyszczono statystyki sesji.")
 
 #endregion
 

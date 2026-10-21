@@ -34,6 +34,11 @@ var _side_tweens: Array[Tween] = [null, null]
 ## Imię zwycięzcy ostatnio rozstrzygniętej rundy finału (pokazywane przed kolejną rundą).
 var _last_round_winner := ""
 
+var _intro_tween: Tween
+
+@onready var _final_intro: Control = %FinalIntro
+@onready var _intro_band: ColorRect = %IntroBand
+@onready var _intro_label: Label = %IntroLabel
 @onready var _duel_caption: Label = %DuelCaption
 @onready var _category_label: Label = %CategoryLabel
 @onready var _image_rect: TextureRect = %ImageRect
@@ -116,6 +121,8 @@ func _on_duel_started(attacker_id: int, defender_id: int) -> void:
 	else:
 		AudioManager.play_music(AudioManager.MUSIC_DUEL)
 	_fade_in()
+	if GameManager.is_final and GameManager.final_round == 1:
+		_play_final_intro()
 
 
 ## Finał: runda rozstrzygnięta – zaraz przyjdzie duel_started kolejnej rundy (albo koniec gry).
@@ -124,13 +131,14 @@ func _on_final_round_finished(round_winner_id: int, _round_number: int) -> void:
 	AudioManager.play_sfx(AudioManager.SFX_CORRECT, 3.0)
 
 
-## 3, 2 -> click, 1 -> beep. Zdjęcie pojawi się dopiero po "1".
+## 3, 2, 1 -> click. "0" to moment pojawienia się pierwszego zdjęcia – wtedy gra start.wav
+## (patrz _on_duel_image_changed, akcja START).
 func _on_countdown_changed(value: int) -> void:
 	_placeholder_label.hide()
 	_countdown_label.text = str(value)
 	_countdown_label.show()
 	_pop(_countdown_label)
-	AudioManager.play_sfx(AudioManager.SFX_BEEP if value == 1 else AudioManager.SFX_CLICK)
+	AudioManager.play_sfx(AudioManager.SFX_CLICK)
 
 
 func _on_duel_image_changed(image: Dictionary, previous_answer: String, action: int) -> void:
@@ -158,8 +166,11 @@ func _on_duel_image_changed(image: Dictionary, previous_answer: String, action: 
 	_image_tween.tween_property(_image_rect, "scale", Vector2.ONE, 0.18)
 	_image_tween.tween_property(_image_rect, "modulate:a", 1.0, 0.12)
 
+	# Koniec odliczania ("0"): pierwsze zdjęcie + dźwięk startu.
+	if action == GameManager.DuelAction.START:
+		AudioManager.play_sfx(AudioManager.SFX_START)
 	# Po pasie odpowiedź była już widoczna w trakcie kary – tu tylko przy poprawnej.
-	if action == GameManager.DuelAction.CORRECT:
+	elif action == GameManager.DuelAction.CORRECT:
 		AudioManager.play_sfx(AudioManager.SFX_CORRECT)
 		_show_feedback(previous_answer, CORRECT_COLOR, FEEDBACK_DURATION)
 
@@ -205,6 +216,8 @@ func _on_duel_timeout(loser_side: int) -> void:
 
 
 func _on_duel_ended() -> void:
+	_kill(_intro_tween)
+	_final_intro.hide()
 	AudioManager.stop_question()
 	AudioManager.play_music(AudioManager.MUSIC_MAIN)
 	_fade_out()
@@ -272,6 +285,43 @@ func _make_side_style(color: Color) -> StyleBoxFlat:
 
 
 #region Animacje
+
+## Przed finałem: przez środek ekranu otwiera się ciemny pas ze złotymi liniami, wielki
+## napis "FINAŁ" wjeżdża z prawej, chwilę stoi (beep) i wyjeżdża w lewo (ok. 2 s).
+func _play_final_intro() -> void:
+	_kill(_intro_tween)
+	var width := size.x
+	_final_intro.show()
+	_intro_band.pivot_offset = _intro_band.size * 0.5
+	_intro_band.scale = Vector2(1.0, 0.0)
+	_intro_label.pivot_offset = _intro_label.size * 0.5
+	_intro_label.position.x = width
+	_intro_label.scale = Vector2.ONE * 1.4
+	_intro_label.modulate.a = 0.0
+	AudioManager.play_sfx(AudioManager.SFX_WOOSH, 2.0)
+
+	_intro_tween = create_tween()
+	_intro_tween.tween_interval(FADE_DURATION) # Najpierw ekran pojedynku się pojawia.
+	# Wejście: pas się rozwiera, napis wjeżdża i "osiada" (zmniejsza się do 1).
+	_intro_tween.tween_property(_intro_band, "scale:y", 1.0, 0.3) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_intro_tween.parallel().tween_property(_intro_label, "position:x", 0.0, 0.55) \
+		.set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+	_intro_tween.parallel().tween_property(_intro_label, "modulate:a", 1.0, 0.25)
+	_intro_tween.parallel().tween_property(_intro_label, "scale", Vector2.ONE, 0.55) \
+		.set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+	# Pauza z delikatnym "oddechem" napisu.
+	_intro_tween.tween_property(_intro_label, "scale", Vector2.ONE * 1.06, 0.45) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_intro_tween.tween_property(_intro_label, "scale", Vector2.ONE, 0.45) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	# Wyjście w lewo i zamknięcie pasa.
+	_intro_tween.tween_property(_intro_label, "position:x", -width, 0.4) \
+		.set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_IN)
+	_intro_tween.parallel().tween_property(_intro_band, "scale:y", 0.0, 0.3) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN).set_delay(0.15)
+	_intro_tween.tween_callback(_final_intro.hide)
+
 
 func _hide_penalty(instant: bool) -> void:
 	_penalty_box.hide()

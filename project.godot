@@ -23,7 +23,9 @@ config/features=PackedStringArray("4.7", "GL Compatibility")
 
 CategoryManager="*res://autoload/CategoryManager.gd"
 GameManager="*res://autoload/GameManager.gd"
+StatsManager="*res://autoload/StatsManager.gd"
 AudioManager="*res://autoload/AudioManager.gd"
+SettingsManager="*res://autoload/SettingsManager.gd"
 
 [display]
 

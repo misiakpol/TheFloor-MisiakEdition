@@ -1,15 +1,13 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://bc12kkw2qfxnm"]
 
-[ext_resource type="Script" path="res://scenes/admin/AdminWindow.gd" id="1_admin"]
+[ext_resource type="Script" uid="uid://bnksgdlmxiqml" path="res://scenes/admin/AdminWindow.gd" id="1_admin"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBox_btn_normal"]
+[sub_resource type="StyleBoxFlat" id="StyleBox_btn_disabled"]
 content_margin_left = 14.0
 content_margin_top = 9.0
 content_margin_right = 14.0
 content_margin_bottom = 9.0
-bg_color = Color(0.18, 0.19, 0.3, 1)
-border_width_bottom = 2
-border_color = Color(0.1, 0.1, 0.17, 1)
+bg_color = Color(0.12, 0.12, 0.18, 1)
 corner_radius_top_left = 8
 corner_radius_top_right = 8
 corner_radius_bottom_right = 8
@@ -28,23 +26,25 @@ corner_radius_top_right = 8
 corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
 
+[sub_resource type="StyleBoxFlat" id="StyleBox_btn_normal"]
+content_margin_left = 14.0
+content_margin_top = 9.0
+content_margin_right = 14.0
+content_margin_bottom = 9.0
+bg_color = Color(0.18, 0.19, 0.3, 1)
+border_width_bottom = 2
+border_color = Color(0.1, 0.1, 0.17, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
 [sub_resource type="StyleBoxFlat" id="StyleBox_btn_pressed"]
 content_margin_left = 14.0
 content_margin_top = 9.0
 content_margin_right = 14.0
 content_margin_bottom = 9.0
 bg_color = Color(1, 0.82, 0.4, 1)
-corner_radius_top_left = 8
-corner_radius_top_right = 8
-corner_radius_bottom_right = 8
-corner_radius_bottom_left = 8
-
-[sub_resource type="StyleBoxFlat" id="StyleBox_btn_disabled"]
-content_margin_left = 14.0
-content_margin_top = 9.0
-content_margin_right = 14.0
-content_margin_bottom = 9.0
-bg_color = Color(0.12, 0.12, 0.18, 1)
 corner_radius_top_left = 8
 corner_radius_top_right = 8
 corner_radius_bottom_right = 8
@@ -71,6 +71,15 @@ corner_radius_top_right = 8
 corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
 
+[sub_resource type="StyleBoxFlat" id="StyleBox_tab_hovered"]
+content_margin_left = 18.0
+content_margin_top = 8.0
+content_margin_right = 18.0
+content_margin_bottom = 8.0
+bg_color = Color(0.2, 0.21, 0.33, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+
 [sub_resource type="StyleBoxFlat" id="StyleBox_tab_selected"]
 content_margin_left = 18.0
 content_margin_top = 8.0
@@ -91,36 +100,27 @@ bg_color = Color(0.12, 0.12, 0.19, 1)
 corner_radius_top_left = 8
 corner_radius_top_right = 8
 
-[sub_resource type="StyleBoxFlat" id="StyleBox_tab_hovered"]
-content_margin_left = 18.0
-content_margin_top = 8.0
-content_margin_right = 18.0
-content_margin_bottom = 8.0
-bg_color = Color(0.2, 0.21, 0.33, 1)
-corner_radius_top_left = 8
-corner_radius_top_right = 8
-
 [sub_resource type="Theme" id="Theme_admin"]
 default_font_size = 15
 Button/colors/font_color = Color(0.92, 0.93, 1, 1)
+Button/colors/font_disabled_color = Color(0.45, 0.46, 0.55, 1)
 Button/colors/font_hover_color = Color(1, 1, 1, 1)
 Button/colors/font_pressed_color = Color(0.12, 0.08, 0.02, 1)
-Button/colors/font_disabled_color = Color(0.45, 0.46, 0.55, 1)
-Button/styles/normal = SubResource("StyleBox_btn_normal")
-Button/styles/hover = SubResource("StyleBox_btn_hover")
-Button/styles/pressed = SubResource("StyleBox_btn_pressed")
 Button/styles/disabled = SubResource("StyleBox_btn_disabled")
+Button/styles/hover = SubResource("StyleBox_btn_hover")
+Button/styles/normal = SubResource("StyleBox_btn_normal")
+Button/styles/pressed = SubResource("StyleBox_btn_pressed")
 ItemList/styles/panel = SubResource("StyleBox_panel")
 PanelContainer/styles/panel = SubResource("StyleBox_panel")
 RichTextLabel/styles/normal = SubResource("StyleBox_panel")
+TabContainer/colors/font_hovered_color = Color(1, 1, 1, 1)
 TabContainer/colors/font_selected_color = Color(1, 0.82, 0.4, 1)
 TabContainer/colors/font_unselected_color = Color(0.6, 0.62, 0.8, 1)
-TabContainer/colors/font_hovered_color = Color(1, 1, 1, 1)
 TabContainer/font_sizes/font_size = 17
 TabContainer/styles/panel = SubResource("StyleBox_tab_panel")
+TabContainer/styles/tab_hovered = SubResource("StyleBox_tab_hovered")
 TabContainer/styles/tab_selected = SubResource("StyleBox_tab_selected")
 TabContainer/styles/tab_unselected = SubResource("StyleBox_tab_unselected")
-TabContainer/styles/tab_hovered = SubResource("StyleBox_tab_hovered")
 
 [sub_resource type="StyleBoxFlat" id="StyleBox_root"]
 bg_color = Color(0.06, 0.06, 0.1, 1)
@@ -135,6 +135,32 @@ border_width_left = 3
 border_color = Color(1, 0.82, 0.4, 1)
 corner_radius_top_right = 8
 corner_radius_bottom_right = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_finish"]
+content_margin_left = 14.0
+content_margin_top = 9.0
+content_margin_right = 14.0
+content_margin_bottom = 9.0
+bg_color = Color(0.7, 0.16, 0.3, 1)
+border_width_bottom = 3
+border_color = Color(0.42, 0.08, 0.17, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_finish_hover"]
+content_margin_left = 14.0
+content_margin_top = 9.0
+content_margin_right = 14.0
+content_margin_bottom = 9.0
+bg_color = Color(0.86, 0.22, 0.38, 1)
+border_width_bottom = 3
+border_color = Color(1, 0.82, 0.4, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
 
 [sub_resource type="StyleBoxFlat" id="StyleBox_correct"]
 content_margin_left = 14.0
@@ -188,41 +214,16 @@ corner_radius_top_right = 10
 corner_radius_bottom_right = 10
 corner_radius_bottom_left = 10
 
-[sub_resource type="StyleBoxFlat" id="StyleBox_finish"]
-content_margin_left = 14.0
-content_margin_top = 9.0
-content_margin_right = 14.0
-content_margin_bottom = 9.0
-bg_color = Color(0.7, 0.16, 0.3, 1)
-border_width_bottom = 3
-border_color = Color(0.42, 0.08, 0.17, 1)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
-
-[sub_resource type="StyleBoxFlat" id="StyleBox_finish_hover"]
-content_margin_left = 14.0
-content_margin_top = 9.0
-content_margin_right = 14.0
-content_margin_bottom = 9.0
-bg_color = Color(0.86, 0.22, 0.38, 1)
-border_width_bottom = 3
-border_color = Color(1, 0.82, 0.4, 1)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
-
-[node name="AdminWindow" type="Window"]
+[node name="AdminWindow" type="Window" unique_id=1559619484]
+oversampling_override = 1.0
 title = "The Floor — Konsola Admina"
 position = Vector2i(60, 60)
-size = Vector2i(980, 800)
-min_size = Vector2i(860, 680)
+size = Vector2i(1300, 911)
+min_size = Vector2i(860, 760)
 theme = SubResource("Theme_admin")
 script = ExtResource("1_admin")
 
-[node name="Root" type="PanelContainer" parent="."]
+[node name="Root" type="PanelContainer" parent="." unique_id=24809206]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -230,50 +231,50 @@ grow_horizontal = 2
 grow_vertical = 2
 theme_override_styles/panel = SubResource("StyleBox_root")
 
-[node name="Margin" type="MarginContainer" parent="Root"]
+[node name="Margin" type="MarginContainer" parent="Root" unique_id=1525615070]
 layout_mode = 2
 theme_override_constants/margin_left = 18
 theme_override_constants/margin_top = 14
 theme_override_constants/margin_right = 18
 theme_override_constants/margin_bottom = 14
 
-[node name="VBox" type="VBoxContainer" parent="Root/Margin"]
+[node name="VBox" type="VBoxContainer" parent="Root/Margin" unique_id=1317119595]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="Header" type="Label" parent="Root/Margin/VBox"]
+[node name="Header" type="Label" parent="Root/Margin/VBox" unique_id=31976312]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.82, 0.4, 1)
 theme_override_font_sizes/font_size = 24
 text = "THE FLOOR · Konsola Admina"
 
-[node name="Tabs" type="TabContainer" parent="Root/Margin/VBox"]
+[node name="Tabs" type="TabContainer" parent="Root/Margin/VBox" unique_id=1891050455]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 current_tab = 0
 
-[node name="Konfiguracja" type="HBoxContainer" parent="Root/Margin/VBox/Tabs"]
+[node name="Konfiguracja" type="HBoxContainer" parent="Root/Margin/VBox/Tabs" unique_id=1591054605]
 layout_mode = 2
 theme_override_constants/separation = 18
 metadata/_tab_index = 0
 
-[node name="PlayersColumn" type="VBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja"]
+[node name="PlayersColumn" type="VBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja" unique_id=1469700824]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 10
 
-[node name="PlayersTitle" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn"]
+[node name="PlayersTitle" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn" unique_id=1084971031]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
 theme_override_font_sizes/font_size = 13
 text = "ZARZĄDZANIE GRACZAMI"
 
-[node name="PlayerForm" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn"]
+[node name="PlayerForm" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn" unique_id=362219981]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="PlayerNameEdit" type="LineEdit" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn/PlayerForm"]
+[node name="PlayerNameEdit" type="LineEdit" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn/PlayerForm" unique_id=1154964221]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -281,7 +282,7 @@ placeholder_text = "Imię gracza + Enter"
 max_length = 32
 keep_editing_on_text_submit = true
 
-[node name="PlayerCategoryOption" type="OptionButton" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn/PlayerForm"]
+[node name="PlayerCategoryOption" type="OptionButton" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn/PlayerForm" unique_id=2133422260]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -289,21 +290,21 @@ tooltip_text = "Kategoria gracza (podfolder w kategorie/)"
 clip_text = true
 fit_to_longest_item = false
 
-[node name="AddPlayerButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn/PlayerForm"]
+[node name="AddPlayerButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn/PlayerForm" unique_id=27256664]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Dodaj"
 
-[node name="PlayerList" type="ItemList" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn"]
+[node name="PlayerList" type="ItemList" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn" unique_id=1086470603]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="PlayerActions" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn"]
+[node name="PlayerActions" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn" unique_id=419705598]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="PlayerCountLabel" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn/PlayerActions"]
+[node name="PlayerCountLabel" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn/PlayerActions" unique_id=1993641904]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -311,81 +312,80 @@ theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
 theme_override_font_sizes/font_size = 13
 text = "Graczy na liście: 0"
 
-[node name="UpdatePlayerButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn/PlayerActions"]
+[node name="UpdatePlayerButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn/PlayerActions" unique_id=1145071508]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Zapisuje imię i kategorię zaznaczonego gracza."
 text = "Zapisz zmiany"
 
-[node name="RemovePlayerButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn/PlayerActions"]
+[node name="RemovePlayerButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn/PlayerActions" unique_id=1316113246]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Usuń"
 
-[node name="ClearPlayersButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn/PlayerActions"]
+[node name="ClearPlayersButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn/PlayerActions" unique_id=1281280002]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Wyczyść"
 
-[node name="SettingsColumn" type="VBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja"]
+[node name="SettingsColumn" type="VBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja" unique_id=1055583259]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 10
 
-[node name="FloorTitle" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn"]
+[node name="FloorTitle" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn" unique_id=1609440078]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
 theme_override_font_sizes/font_size = 13
 text = "PODŁOGA"
 
-[node name="PlayerCountRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn"]
+[node name="PlayerCountRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn" unique_id=187527725]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="PlayerCountTitle" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/PlayerCountRow"]
+[node name="PlayerCountTitle" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/PlayerCountRow" unique_id=1033641499]
 layout_mode = 2
 text = "Liczba graczy"
 
-[node name="PlayerCountSpin" type="SpinBox" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/PlayerCountRow"]
+[node name="PlayerCountSpin" type="SpinBox" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/PlayerCountRow" unique_id=1882907006]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 tooltip_text = "Nie mniej niż graczy na liście; brakujących uzupełni gra (Gracz N)."
 min_value = 2.0
-max_value = 100.0
 value = 2.0
 
-[node name="GridPreviewLabel" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/PlayerCountRow"]
+[node name="GridPreviewLabel" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/PlayerCountRow" unique_id=101200115]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
 text = "siatka 2 x 1"
 
-[node name="FloorHint" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn"]
+[node name="FloorHint" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn" unique_id=846720969]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
 theme_override_font_sizes/font_size = 12
 text = "Liczba graczy rośnie razem z listą. Nadwyżka ponad listę to automatyczni gracze (Gracz N) z losową kategorią. Niepełny ostatni rząd jest wyśrodkowany."
 autowrap_mode = 3
 
-[node name="ShuffleCheck" type="CheckBox" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn"]
+[node name="ShuffleCheck" type="CheckBox" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn" unique_id=772996775]
 unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
 text = "Losowe rozmieszczenie graczy na podłodze"
 
-[node name="GenerateButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn"]
+[node name="GenerateButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn" unique_id=202638375]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Generuj Podłogę"
 
-[node name="Sep1" type="HSeparator" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn"]
+[node name="Sep1" type="HSeparator" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn" unique_id=2009267364]
 layout_mode = 2
 
-[node name="CategoryRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn"]
+[node name="CategoryRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn" unique_id=742680162]
 layout_mode = 2
 
-[node name="CategoryCountLabel" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryRow"]
+[node name="CategoryCountLabel" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryRow" unique_id=968302147]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -393,38 +393,120 @@ theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
 theme_override_font_sizes/font_size = 13
 text = "Kategorie: 0"
 
-[node name="ReloadButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryRow"]
+[node name="ReloadButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryRow" unique_id=682510791]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Ponownie skanuje folder kategorie/ (podfoldery, zdjęcia i utwory)."
 text = "Skanuj foldery"
 
-[node name="CategoryList" type="ItemList" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn"]
+[node name="CategoryLists" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn" unique_id=446065597]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="RegularBox" type="VBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryLists" unique_id=1348845153]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="RegularTitle" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryLists/RegularBox" unique_id=537837820]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
+theme_override_font_sizes/font_size = 12
+text = "Zwykłe"
+
+[node name="CategoryList" type="ItemList" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryLists/RegularBox" unique_id=227739991]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 90)
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="Sep2" type="HSeparator" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn"]
+[node name="FinalBox" type="VBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryLists" unique_id=1411108541]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="FinalTitle" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryLists/FinalBox" unique_id=1312780717]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Folder kategorie final/ – grane tylko w rundzie rozstrzygającej finału (remis 1:1)."
+mouse_filter = 1
+theme_override_colors/font_color = Color(1, 0.82, 0.4, 1)
+theme_override_font_sizes/font_size = 12
+text = "Finałowe (runda 3)"
+
+[node name="FinalCategoryList" type="ItemList" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryLists/FinalBox" unique_id=1419659452]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 90)
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="FinalPickRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn" unique_id=323259010]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="FinalPickLabel" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/FinalPickRow" unique_id=1067281518]
+layout_mode = 2
+text = "Kategoria rundy rozstrzygającej"
+
+[node name="FinalCategoryOption" type="OptionButton" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/FinalPickRow" unique_id=1736761469]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Domyślnie losowa z folderu kategorie final/. Można wybrać ręcznie (także zwykłą kategorię)."
+clip_text = true
+fit_to_longest_item = false
+
+[node name="ResetFinalPoolButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/FinalPickRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Przywraca do losowania kategorie finałowe zużyte w tej sesji."
+text = "Odnów pulę"
+
+[node name="Sep2" type="HSeparator" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn" unique_id=81699623]
 layout_mode = 2
 
-[node name="VolumeTitle" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn"]
+[node name="VolumeTitle" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn" unique_id=2032923769]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
 theme_override_font_sizes/font_size = 13
-text = "GŁOŚNOŚĆ"
+text = "USTAWIENIA GRY I GŁOŚNOŚĆ"
 
-[node name="VolumeGrid" type="GridContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn"]
+[node name="DuelTimeRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="DuelTimeLabel" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/DuelTimeRow"]
+layout_mode = 2
+text = "Czas na odpowiedź (s)"
+
+[node name="DuelTimeSpin" type="SpinBox" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/DuelTimeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Startowy czas zegara każdego gracza w pojedynku. Zmiana działa od następnego pojedynku / rundy."
+min_value = 10.0
+max_value = 300.0
+value = 45.0
+suffix = "s"
+
+[node name="SaveSettingsButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/DuelTimeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Zapisuje czas na odpowiedź i głośności – wczytają się przy następnym uruchomieniu."
+text = "Zapisz ustawienia"
+
+[node name="VolumeGrid" type="GridContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn" unique_id=1256483345]
 layout_mode = 2
 theme_override_constants/h_separation = 10
 theme_override_constants/v_separation = 6
 columns = 3
 
-[node name="MusicVolumeLabel" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/VolumeGrid"]
+[node name="MusicVolumeLabel" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/VolumeGrid" unique_id=1698035596]
 layout_mode = 2
 text = "Muzyka tła"
 
-[node name="MusicVolumeSlider" type="HSlider" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/VolumeGrid"]
+[node name="MusicVolumeSlider" type="HSlider" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/VolumeGrid" unique_id=320600949]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -432,18 +514,18 @@ size_flags_vertical = 4
 max_value = 1.0
 step = 0.01
 
-[node name="MusicVolumeValue" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/VolumeGrid"]
+[node name="MusicVolumeValue" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/VolumeGrid" unique_id=1144992658]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(48, 0)
 layout_mode = 2
 text = "100%"
 horizontal_alignment = 2
 
-[node name="SfxVolumeLabel" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/VolumeGrid"]
+[node name="SfxVolumeLabel" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/VolumeGrid" unique_id=1970389810]
 layout_mode = 2
 text = "Efekty (SFX)"
 
-[node name="SfxVolumeSlider" type="HSlider" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/VolumeGrid"]
+[node name="SfxVolumeSlider" type="HSlider" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/VolumeGrid" unique_id=1607623328]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -451,20 +533,20 @@ size_flags_vertical = 4
 max_value = 1.0
 step = 0.01
 
-[node name="SfxVolumeValue" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/VolumeGrid"]
+[node name="SfxVolumeValue" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/VolumeGrid" unique_id=1027107712]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(48, 0)
 layout_mode = 2
 text = "100%"
 horizontal_alignment = 2
 
-[node name="QuestionVolumeLabel" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/VolumeGrid"]
+[node name="QuestionVolumeLabel" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/VolumeGrid" unique_id=1489519784]
 layout_mode = 2
 tooltip_text = "Utwory-pytania w kategoriach muzycznych"
 mouse_filter = 1
 text = "Utwory (pytania)"
 
-[node name="QuestionVolumeSlider" type="HSlider" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/VolumeGrid"]
+[node name="QuestionVolumeSlider" type="HSlider" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/VolumeGrid" unique_id=1083904823]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -472,36 +554,36 @@ size_flags_vertical = 4
 max_value = 1.0
 step = 0.01
 
-[node name="QuestionVolumeValue" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/VolumeGrid"]
+[node name="QuestionVolumeValue" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/VolumeGrid" unique_id=1015373038]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(48, 0)
 layout_mode = 2
 text = "100%"
 horizontal_alignment = 2
 
-[node name="Rozgrywka" type="VBoxContainer" parent="Root/Margin/VBox/Tabs"]
+[node name="Rozgrywka" type="VBoxContainer" parent="Root/Margin/VBox/Tabs" unique_id=987245233]
 visible = false
 layout_mode = 2
 theme_override_constants/separation = 10
 metadata/_tab_index = 1
 
-[node name="GameView" type="VBoxContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka"]
+[node name="GameView" type="VBoxContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka" unique_id=178157724]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 12
 
-[node name="GameTitle" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/GameView"]
+[node name="GameTitle" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/GameView" unique_id=489040521]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
 theme_override_font_sizes/font_size = 13
 text = "ROZGRYWKA"
 
-[node name="StatusPanel" type="PanelContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/GameView"]
+[node name="StatusPanel" type="PanelContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/GameView" unique_id=1101820386]
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBox_accent")
 
-[node name="StatusLabel" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/GameView/StatusPanel"]
+[node name="StatusLabel" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/GameView/StatusPanel" unique_id=2021557968]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
@@ -509,18 +591,18 @@ theme_override_font_sizes/font_size = 18
 text = "Dodaj graczy, ustaw wymiary i wygeneruj podłogę."
 autowrap_mode = 3
 
-[node name="RandomPlayerButton" type="Button" parent="Root/Margin/VBox/Tabs/Rozgrywka/GameView"]
+[node name="RandomPlayerButton" type="Button" parent="Root/Margin/VBox/Tabs/Rozgrywka/GameView" unique_id=2017058605]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 64)
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "Losuj gracza"
 
-[node name="DuelRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/GameView"]
+[node name="DuelRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/GameView" unique_id=1860612239]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="OpponentOption" type="OptionButton" parent="Root/Margin/VBox/Tabs/Rozgrywka/GameView/DuelRow"]
+[node name="OpponentOption" type="OptionButton" parent="Root/Margin/VBox/Tabs/Rozgrywka/GameView/DuelRow" unique_id=1186196470]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
@@ -528,7 +610,7 @@ size_flags_horizontal = 3
 tooltip_text = "Sąsiedzi aktywnego gracza"
 clip_text = true
 
-[node name="DuelButton" type="Button" parent="Root/Margin/VBox/Tabs/Rozgrywka/GameView/DuelRow"]
+[node name="DuelButton" type="Button" parent="Root/Margin/VBox/Tabs/Rozgrywka/GameView/DuelRow" unique_id=1681981256]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
@@ -537,44 +619,44 @@ theme_override_styles/normal = SubResource("StyleBox_finish")
 theme_override_styles/hover = SubResource("StyleBox_finish_hover")
 text = "Rozpocznij pojedynek"
 
-[node name="CancelButton" type="Button" parent="Root/Margin/VBox/Tabs/Rozgrywka/GameView"]
+[node name="CancelButton" type="Button" parent="Root/Margin/VBox/Tabs/Rozgrywka/GameView" unique_id=1427473287]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Anuluj wybór"
 
-[node name="DuelView" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka"]
+[node name="DuelView" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka" unique_id=351683227]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 18
 
-[node name="DuelInfoColumn" type="VBoxContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView"]
+[node name="DuelInfoColumn" type="VBoxContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView" unique_id=1553047202]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 8
 
-[node name="DuelHeader" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn"]
+[node name="DuelHeader" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn" unique_id=2101795034]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
 theme_override_font_sizes/font_size = 13
 text = "POJEDYNEK"
 
-[node name="DuelTitleLabel" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn"]
+[node name="DuelTitleLabel" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn" unique_id=1101744199]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 22
 text = "Gracz 1  vs  Gracz 2"
 autowrap_mode = 3
 
-[node name="DuelCategoryLabel" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn"]
+[node name="DuelCategoryLabel" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn" unique_id=1062634669]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.82, 0.4, 1)
 text = "Kategoria: -"
 autowrap_mode = 3
 
-[node name="DuelPhaseLabel" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn"]
+[node name="DuelPhaseLabel" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn" unique_id=1690754474]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.92, 0.93, 1, 1)
@@ -582,19 +664,19 @@ theme_override_font_sizes/font_size = 18
 text = "Czeka na START"
 autowrap_mode = 3
 
-[node name="TimesRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn"]
+[node name="TimesRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn" unique_id=559362873]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="AttackerBox" type="PanelContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn/TimesRow"]
+[node name="AttackerBox" type="PanelContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn/TimesRow" unique_id=1258463550]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="AttackerVBox" type="VBoxContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn/TimesRow/AttackerBox"]
+[node name="AttackerVBox" type="VBoxContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn/TimesRow/AttackerBox" unique_id=987902789]
 layout_mode = 2
 theme_override_constants/separation = 0
 
-[node name="AttackerNameLabel" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn/TimesRow/AttackerBox/AttackerVBox"]
+[node name="AttackerNameLabel" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn/TimesRow/AttackerBox/AttackerVBox" unique_id=23903227]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Gracz 1"
@@ -602,22 +684,22 @@ horizontal_alignment = 1
 clip_text = true
 text_overrun_behavior = 3
 
-[node name="AttackerTimeLabel" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn/TimesRow/AttackerBox/AttackerVBox"]
+[node name="AttackerTimeLabel" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn/TimesRow/AttackerBox/AttackerVBox" unique_id=1886885050]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 40
 text = "45.0 s"
 horizontal_alignment = 1
 
-[node name="DefenderBox" type="PanelContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn/TimesRow"]
+[node name="DefenderBox" type="PanelContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn/TimesRow" unique_id=1857159968]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="DefenderVBox" type="VBoxContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn/TimesRow/DefenderBox"]
+[node name="DefenderVBox" type="VBoxContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn/TimesRow/DefenderBox" unique_id=898235036]
 layout_mode = 2
 theme_override_constants/separation = 0
 
-[node name="DefenderNameLabel" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn/TimesRow/DefenderBox/DefenderVBox"]
+[node name="DefenderNameLabel" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn/TimesRow/DefenderBox/DefenderVBox" unique_id=626168101]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Gracz 2"
@@ -625,29 +707,29 @@ horizontal_alignment = 1
 clip_text = true
 text_overrun_behavior = 3
 
-[node name="DefenderTimeLabel" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn/TimesRow/DefenderBox/DefenderVBox"]
+[node name="DefenderTimeLabel" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn/TimesRow/DefenderBox/DefenderVBox" unique_id=1211762022]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 40
 text = "45.0 s"
 horizontal_alignment = 1
 
-[node name="AnswerPanel" type="PanelContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn"]
+[node name="AnswerPanel" type="PanelContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn" unique_id=1559706002]
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBox_accent")
 
-[node name="AnswerVBox" type="VBoxContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn/AnswerPanel"]
+[node name="AnswerVBox" type="VBoxContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn/AnswerPanel" unique_id=24205944]
 layout_mode = 2
 theme_override_constants/separation = 2
 
-[node name="AnswerCaption" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn/AnswerPanel/AnswerVBox"]
+[node name="AnswerCaption" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn/AnswerPanel/AnswerVBox" unique_id=1537155514]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
 theme_override_font_sizes/font_size = 13
 text = "POPRAWNA ODPOWIEDŹ"
 
-[node name="AnswerLabel" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn/AnswerPanel/AnswerVBox"]
+[node name="AnswerLabel" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn/AnswerPanel/AnswerVBox" unique_id=900520744]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.82, 0.4, 1)
@@ -655,7 +737,7 @@ theme_override_font_sizes/font_size = 30
 text = "-"
 autowrap_mode = 3
 
-[node name="AnswerPreview" type="TextureRect" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn"]
+[node name="AnswerPreview" type="TextureRect" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn" unique_id=1163744961]
 unique_name_in_owner = true
 texture_filter = 4
 custom_minimum_size = Vector2(0, 120)
@@ -664,18 +746,18 @@ size_flags_vertical = 3
 expand_mode = 1
 stretch_mode = 5
 
-[node name="DuelControlColumn" type="VBoxContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView"]
+[node name="DuelControlColumn" type="VBoxContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView" unique_id=1114428000]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 10
 
-[node name="ControlTitle" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelControlColumn"]
+[node name="ControlTitle" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelControlColumn" unique_id=633332371]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
 theme_override_font_sizes/font_size = 13
 text = "STEROWANIE"
 
-[node name="StartDuelButton" type="Button" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelControlColumn"]
+[node name="StartDuelButton" type="Button" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelControlColumn" unique_id=459814104]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 64)
 layout_mode = 2
@@ -685,7 +767,7 @@ theme_override_styles/normal = SubResource("StyleBox_correct")
 theme_override_styles/hover = SubResource("StyleBox_correct_hover")
 text = "START  (Enter)"
 
-[node name="CorrectButton" type="Button" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelControlColumn"]
+[node name="CorrectButton" type="Button" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelControlColumn" unique_id=2027423586]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 84)
 layout_mode = 2
@@ -696,7 +778,7 @@ theme_override_styles/hover = SubResource("StyleBox_correct_hover")
 text = "Poprawna odpowiedź / Zmiana gracza  (Enter)"
 autowrap_mode = 3
 
-[node name="PassButton" type="Button" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelControlColumn"]
+[node name="PassButton" type="Button" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelControlColumn" unique_id=325425570]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 64)
 layout_mode = 2
@@ -706,13 +788,13 @@ theme_override_styles/normal = SubResource("StyleBox_pass")
 theme_override_styles/hover = SubResource("StyleBox_pass_hover")
 text = "Pas  (kara 3 s)  (P)"
 
-[node name="PauseButton" type="Button" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelControlColumn"]
+[node name="PauseButton" type="Button" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelControlColumn" unique_id=845636250]
 unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 text = "Pauza"
 
-[node name="FinishDuelButton" type="Button" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelControlColumn"]
+[node name="FinishDuelButton" type="Button" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelControlColumn" unique_id=1921334582]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 56)
 layout_mode = 2
@@ -723,46 +805,95 @@ theme_override_styles/hover = SubResource("StyleBox_finish_hover")
 text = "Koniec pojedynku"
 autowrap_mode = 3
 
-[node name="Spacer" type="Control" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelControlColumn"]
+[node name="Spacer" type="Control" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelControlColumn" unique_id=1625499217]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="OverrideTitle" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelControlColumn"]
+[node name="OverrideTitle" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelControlColumn" unique_id=1368815316]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
 theme_override_font_sizes/font_size = 13
 text = "RĘCZNE ROZSTRZYGNIĘCIE"
 
-[node name="OverrideRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelControlColumn"]
+[node name="OverrideRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelControlColumn" unique_id=888187002]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="AttackerWinsButton" type="Button" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelControlColumn/OverrideRow"]
+[node name="AttackerWinsButton" type="Button" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelControlColumn/OverrideRow" unique_id=1748524301]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 focus_mode = 0
-clip_text = true
 text = "Gracz wygrywa"
+clip_text = true
 
-[node name="DefenderWinsButton" type="Button" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelControlColumn/OverrideRow"]
+[node name="DefenderWinsButton" type="Button" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelControlColumn/OverrideRow" unique_id=1009989264]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 focus_mode = 0
-clip_text = true
 text = "Obrońca wygrywa"
+clip_text = true
 
-[node name="AbortDuelButton" type="Button" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelControlColumn"]
+[node name="AbortDuelButton" type="Button" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelControlColumn" unique_id=762978729]
 unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 text = "Przerwij pojedynek (bez zmian na podłodze)"
 
-[node name="Log" type="RichTextLabel" parent="Root/Margin/VBox"]
+[node name="Statystyki" type="VBoxContainer" parent="Root/Margin/VBox/Tabs"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 10
+metadata/_tab_index = 2
+
+[node name="StatsHeaderRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Statystyki"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="RankingTitle" type="Label" parent="Root/Margin/VBox/Tabs/Statystyki/StatsHeaderRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
+theme_override_font_sizes/font_size = 13
+text = "RANKING SESJI (tytuły > wygrane pojedynki > % wygranych > pola > poprawne)"
+
+[node name="ResetStatsButton" type="Button" parent="Root/Margin/VBox/Tabs/Statystyki/StatsHeaderRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Zeruje statystyki bieżącej sesji (podwójne kliknięcie dla pewności)."
+text = "Wyczyść statystyki"
+
+[node name="RankingTree" type="Tree" parent="Root/Margin/VBox/Tabs/Statystyki"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 260)
+layout_mode = 2
+size_flags_vertical = 3
+columns = 12
+column_titles_visible = true
+hide_root = true
+select_mode = 1
+
+[node name="FactsTitle" type="Label" parent="Root/Margin/VBox/Tabs/Statystyki"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
+theme_override_font_sizes/font_size = 13
+text = "CIEKAWOSTKI SESJI"
+
+[node name="FactsLabel" type="RichTextLabel" parent="Root/Margin/VBox/Tabs/Statystyki"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 170)
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 15
+theme_override_font_sizes/bold_font_size = 15
+bbcode_enabled = true
+scroll_active = false
+
+[node name="Log" type="RichTextLabel" parent="Root/Margin/VBox" unique_id=1641241263]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 110)
 layout_mode = 2
+focus_mode = 2
 theme_override_font_sizes/normal_font_size = 13
 bbcode_enabled = true
 scroll_following = true

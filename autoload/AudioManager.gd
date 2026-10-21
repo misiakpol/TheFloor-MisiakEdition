@@ -14,6 +14,7 @@ extends Node
 
 const SFX_CLICK: AudioStream = preload("res://audio/sfx/click.wav")
 const SFX_BEEP: AudioStream = preload("res://audio/sfx/beep.wav")
+const SFX_START: AudioStream = preload("res://audio/sfx/start.wav")
 const SFX_CORRECT: AudioStream = preload("res://audio/sfx/correct.wav")
 const SFX_PASS: AudioStream = preload("res://audio/sfx/fahh.wav")
 const SFX_WOOSH: AudioStream = preload("res://audio/sfx/woosh.wav")

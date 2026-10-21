@@ -3,6 +3,7 @@
 [ext_resource type="Script" path="res://scenes/main/Main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/admin/AdminWindow.tscn" id="2_admin"]
 [ext_resource type="PackedScene" path="res://scenes/duel/DuelScreen.tscn" id="3_duel"]
+[ext_resource type="PackedScene" path="res://scenes/effects/WinnerScreen.tscn" id="4_winner"]
 
 [sub_resource type="Gradient" id="Gradient_bg"]
 offsets = PackedFloat32Array(0, 0.55, 1)
@@ -117,6 +118,9 @@ theme_override_constants/v_separation = 10
 columns = 8
 
 [node name="DuelScreen" parent="." instance=ExtResource("3_duel")]
+layout_mode = 1
+
+[node name="WinnerScreen" parent="." instance=ExtResource("4_winner")]
 layout_mode = 1
 
 [node name="AdminWindow" parent="." instance=ExtResource("2_admin")]

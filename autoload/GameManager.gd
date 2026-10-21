@@ -46,6 +46,11 @@ signal duel_penalty_started(side: int)
 ## Minęła sekunda kary (zdjęta z zegara gracza). [param penalty_left] = 2, 1, 0.
 signal duel_penalty_ticked(side: int, penalty_left: int)
 signal duel_timeout(loser_side: int)
+## Odpowiedź gracza: [param correct] = poprawna (false = pas), [param seconds] – ile czasu
+## ZEGARA gracza zajęło to pytanie (bez pauz i odliczania). Dla statystyk.
+signal duel_answered(player_id: int, correct: bool, seconds: float, answer: String)
+## Zmieniła się lista kategorii finałowych zużytych w tej sesji.
+signal used_final_categories_changed
 ## Pojedynek zakończony (rozstrzygnięty lub przerwany) – ekran pojedynku może zniknąć.
 signal duel_ended
 ## Finał: runda [param round_number] rozstrzygnięta (za chwilę przyjdzie duel_started kolejnej
@@ -74,7 +79,9 @@ const EMPTY_CELL := -1
 const NEIGHBOR_OFFSETS := [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]
 const ATTACKER_SIDE := 0 ## Lewa strona ekranu pojedynku.
 const DEFENDER_SIDE := 1 ## Prawa strona ekranu pojedynku.
-const DUEL_TIME := 45.0
+const DEFAULT_DUEL_TIME := 45.0
+const MIN_DUEL_TIME := 10.0
+const MAX_DUEL_TIME := 300.0
 const COUNTDOWN_FROM := 3
 ## Kara za pas w pełnych sekundach (zdejmowana po 1 s na sekundę).
 const PASS_PENALTY := 3
@@ -107,7 +114,9 @@ var _roll_id := 0
 var duel_state: DuelState = DuelState.READY
 var duel_active_side := ATTACKER_SIDE
 ## Pozostały czas: [ATTACKER_SIDE, DEFENDER_SIDE].
-var duel_times := PackedFloat32Array([DUEL_TIME, DUEL_TIME])
+## Czas na odpowiedź – startowa wartość zegara każdego gracza (ustawienie, zapisywane).
+var duel_time := DEFAULT_DUEL_TIME
+var duel_times := PackedFloat32Array([DEFAULT_DUEL_TIME, DEFAULT_DUEL_TIME])
 ## Aktualne zdjęcie: [code]{ answer, path }[/code] (puste przed STARTEM).
 var duel_image: Dictionary = {}
 ## Aktualna liczba odliczania (3, 2, 1) w stanie COUNTDOWN.
@@ -123,8 +132,15 @@ var is_final := false
 var final_round := 0
 ## Wygrane rundy finału: [ATTACKER_SIDE, DEFENDER_SIDE].
 var final_score := PackedInt32Array([0, 0])
+## Kategoria rundy rozstrzygającej wybrana ręcznie przez admina (klucz "final:..." albo
+## zwykła nazwa). Pusta = losowa z folderu "kategorie final".
+var final_category_override := ""
+## Kategorie rundy rozstrzygającej zagrane w TEJ sesji (klucze) – nie są losowane ponownie.
+var used_final_categories: Array[String] = []
 ## Czas, który upłynął w bieżącym kroku odliczania / kary (kroki co 1 s).
 var _duel_step_time := 0.0
+## Czas zegara (RUNNING), jaki upłynął na bieżące pytanie.
+var _question_time := 0.0
 var _state_before_pause: DuelState = DuelState.RUNNING
 
 
@@ -397,7 +413,7 @@ func _start_round(category: String) -> void:
 	if not _duel_deck.is_empty():
 		CategoryManager.preload_file(_duel_deck.back()["path"])
 	duel_image = {}
-	duel_times = PackedFloat32Array([DUEL_TIME, DUEL_TIME])
+	duel_times = PackedFloat32Array([duel_time, duel_time])
 	duel_active_side = ATTACKER_SIDE
 	duel_state = DuelState.READY
 	duel_countdown = 0
@@ -426,6 +442,8 @@ func begin_duel() -> void:
 func duel_correct() -> void:
 	if phase != Phase.DUEL or duel_state != DuelState.RUNNING:
 		return
+	duel_answered.emit(get_duel_player_id(duel_active_side), true, _question_time,
+			duel_image.get("answer", ""))
 	duel_active_side = 1 - duel_active_side
 	_show_next_image(DuelAction.CORRECT)
 	duel_turn_changed.emit(duel_active_side)
@@ -436,6 +454,8 @@ func duel_correct() -> void:
 func duel_pass() -> void:
 	if phase != Phase.DUEL or duel_state != DuelState.RUNNING:
 		return
+	duel_answered.emit(get_duel_player_id(duel_active_side), false, _question_time,
+			duel_image.get("answer", ""))
 	duel_state = DuelState.PENALTY
 	duel_penalty_left = PASS_PENALTY
 	_duel_step_time = 0.0
@@ -545,12 +565,61 @@ func _finish_final_round(attacker_wins: bool) -> bool:
 	return false
 
 
-## Losowa kategoria z folderu "kategorie final"; gdy pusty – zwykła kategoria,
-## która nie była grana w tym finale.
+func set_final_category_override(category_key: String) -> void:
+	final_category_override = category_key
+	if category_key.is_empty():
+		_log("Runda rozstrzygająca finału: losowa kategoria z folderu \"%s\"." % CategoryManager.FINAL_CATEGORIES_DIR)
+	else:
+		_log("Runda rozstrzygająca finału: kategoria \"%s\" (wybór admina)." % CategoryManager.get_display_name(category_key))
+
+
+## Kategorie finałowe z pytaniami, które NIE były jeszcze grane w tej sesji.
+## Czas na odpowiedź (s). Działa od następnego pojedynku / rundy – trwający nie jest zmieniany.
+func set_duel_time(seconds: float) -> void:
+	duel_time = clampf(roundf(seconds), MIN_DUEL_TIME, MAX_DUEL_TIME)
+
+
+func get_unused_final_categories() -> Array[String]:
+	var unused: Array[String] = []
+	for key in CategoryManager.get_final_category_keys():
+		if key not in used_final_categories:
+			unused.append(key)
+	return unused
+
+
+func is_final_category_used(category_key: String) -> bool:
+	return category_key in used_final_categories
+
+
+## Przywraca wszystkie kategorie finałowe do puli losowania (np. nowy wieczór gry).
+func reset_used_final_categories() -> void:
+	used_final_categories.clear()
+	_log("Wszystkie kategorie finałowe wróciły do puli losowania.")
+	used_final_categories_changed.emit()
+
+
+## Kategoria rundy rozstrzygającej: wybór admina, inaczej losowa z NIEZUŻYTYCH kategorii
+## finałowych (ta sama gra finałowa nie powtarza się w sesji). Gdy pula się wyczerpie –
+## zwykła kategoria, która nie była grana w tym finale. Wybrana finałowa jest oznaczana jako zużyta.
 func _pick_final_category() -> String:
-	var keys: Array = CategoryManager.get_final_category_keys()
+	var picked := _choose_final_category()
+	if CategoryManager.is_final_category(picked) and picked not in used_final_categories:
+		used_final_categories.append(picked)
+		used_final_categories_changed.emit()
+	return picked
+
+
+func _choose_final_category() -> String:
+	# Kategoria wybrana ręcznie w konsoli admina ma pierwszeństwo przed losowaniem.
+	if not CategoryManager.get_questions(final_category_override).is_empty():
+		_log("Runda rozstrzygająca: kategoria wybrana przez admina.")
+		return final_category_override
+	var keys: Array = get_unused_final_categories()
 	if keys.is_empty():
-		_log("Folder \"%s\" jest pusty – losuję zwykłą kategorię." % CategoryManager.FINAL_CATEGORIES_DIR)
+		if CategoryManager.get_final_category_keys().is_empty():
+			_log("Folder \"%s\" jest pusty – losuję zwykłą kategorię." % CategoryManager.FINAL_CATEGORIES_DIR)
+		else:
+			_log("Wszystkie kategorie finałowe zostały już zużyte w tej sesji – losuję zwykłą kategorię.")
 		var played := [get_player_category(defender_id), get_player_category(selected_player_id), duel_category]
 		keys = CategoryManager.get_category_names().filter(
 			func(category_name: String) -> bool:
@@ -573,6 +642,7 @@ func _process_countdown(delta: float) -> void:
 
 
 func _process_clock(delta: float) -> void:
+	_question_time += delta
 	var side := duel_active_side
 	var before := duel_times[side]
 	duel_times[side] = maxf(before - delta, 0.0)
@@ -620,6 +690,7 @@ func _show_next_image(action: DuelAction) -> void:
 		_log("Pokazano już wszystkie zdjęcia z kategorii – tasuję od nowa.")
 
 	duel_image = _duel_deck.pop_back()
+	_question_time = 0.0
 	if not _duel_deck.is_empty():
 		CategoryManager.preload_file(_duel_deck.back()["path"])
 	duel_image_changed.emit(duel_image, previous_answer, action)

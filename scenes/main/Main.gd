@@ -21,6 +21,7 @@ const RADIAL_CAPTURE_SHADER: Shader = preload("res://scenes/tile/radial_capture.
 
 const APPEAR_WAVE_DELAY := 0.07 ## Opóźnienie fali wejścia na jednostkę odległości od środka.
 const CAPTURE_DURATION := 3.0 ## Czas radialnego malowania całej przejmowanej strefy.
+const WINNER_REVEAL_DELAY := 1.5 ## Pauza po zapełnieniu podłogi, zanim pojawi się ekran zwycięzcy.
 const CAPTURE_EDGE_WIDTH := 36.0 ## Jasne czoło fali (piksele) – patrz radial_capture.gdshader.
 const ROLL_HOPS := 18 ## Liczba przeskoków podświetlenia w ruletce.
 const ROLL_LANDING_PAUSE := 0.3 ## Ostatni przeskok tyle przed ogłoszeniem wyniku (pauza przed "beep").
@@ -72,6 +73,7 @@ var _capture_winner := -1
 @onready var _banner_label: Label = %BannerLabel
 @onready var _grid: GridContainer = %Grid
 @onready var _admin_window: Window = $AdminWindow
+@onready var _winner_screen: WinnerScreen = $WinnerScreen
 ## Konfetti na koniec gry – rysowane nad podłogą i ekranem pojedynku.
 @onready var _confetti: Confetti = _create_confetti()
 
@@ -122,6 +124,7 @@ func _connect_game_signals() -> void:
 func _on_floor_generated(columns: int, rows: int) -> void:
 	_stop_roll()
 	_confetti.stop()
+	_winner_screen.hide_now()
 	_clear_floor()
 	_floor_generation += 1
 	_grid.columns = columns
@@ -279,13 +282,26 @@ func _on_selection_cleared() -> void:
 	_show_banner("Kto następny?", Color.WHITE)
 
 
+## Koniec gry: najpierw widać, jak fala zalewa ostatnie terytorium, chwilę później
+## (WINNER_REVEAL_DELAY) pełnoekranowe ogłoszenie zwycięzcy + konfetti + muzyka zwycięstwa.
 func _on_game_over(winner_id: int) -> void:
 	_set_highlights({ winner_id: Tile.HighlightStyle.WINNER })
-	AudioManager.play_win_music()
 	_show_banner("ZWYCIĘZCA: %s!" % GameManager.get_player_name(winner_id), SUCCESS_COLOR)
-	# Konfetti, gdy ekran pojedynku już zniknie.
-	get_tree().create_timer(DuelScreen.FADE_DURATION).timeout.connect(
-			_play_confetti.bind(_floor_generation, winner_id))
+	var reveal_delay := DuelScreen.FADE_DURATION + CAPTURE_DURATION + WINNER_REVEAL_DELAY
+	get_tree().create_timer(reveal_delay).timeout.connect(
+			_reveal_winner.bind(_floor_generation, winner_id))
+
+
+func _reveal_winner(generation: int, winner_id: int) -> void:
+	if generation != _floor_generation:
+		return # W międzyczasie wygenerowano nową podłogę.
+	var tiles := GameManager.players.size()
+	var few := tiles % 10 in [2, 3, 4] and tiles % 100 not in [12, 13, 14]
+	_winner_screen.show_winner(GameManager.get_player_name(winner_id),
+			GameManager.get_player_color(winner_id),
+			"Zdobyta cała podłoga – %d %s" % [tiles, "pola" if few else "pól"])
+	AudioManager.play_win_music()
+	_play_confetti(generation, winner_id)
 
 
 func _create_confetti() -> Confetti:
