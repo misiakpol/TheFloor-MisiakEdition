@@ -13,6 +13,10 @@ extends Node
 ## Siatka dopasowuje się do liczby graczy: kolumny = ceil(sqrt(n)), niepełny ostatni rząd
 ## jest wyśrodkowany.
 ##
+## FINAŁ (na podłodze zostało 2 graczy) to rundy do dwóch wygranych:
+## [br]1. kategoria zaatakowanego, [br]2. dogrywka – kategoria atakującego (jeszcze niezagrana),
+## [br]3. przy remisie 1:1 – losowa kategoria z folderu [code]kategorie final[/code].
+##
 ## Ruletka losuje w pierwszej kolejności graczy bez żadnego pojedynku na koncie i nigdy
 ## nie losuje gracza, który przed chwilą zszedł z podłogi ([member last_stepped_down_player]).
 ## Wygrany pojedynek przenosi WSZYSTKIE pola przegranego na zwycięzcę, a przegrany odpada.
@@ -44,6 +48,9 @@ signal duel_penalty_ticked(side: int, penalty_left: int)
 signal duel_timeout(loser_side: int)
 ## Pojedynek zakończony (rozstrzygnięty lub przerwany) – ekran pojedynku może zniknąć.
 signal duel_ended
+## Finał: runda [param round_number] rozstrzygnięta (za chwilę przyjdzie duel_started kolejnej
+## rundy albo – gdy ktoś ma 2 wygrane – territory_captured i game_over).
+signal final_round_finished(round_winner_id: int, round_number: int)
 ## Po przejęciu zwycięzca pozostaje aktywnym graczem (może walczyć dalej).
 signal territory_captured(winner_id: int, loser_id: int, tile_indices: PackedInt32Array)
 signal selection_cleared
@@ -73,6 +80,7 @@ const COUNTDOWN_FROM := 3
 const PASS_PENALTY := 3
 const NO_CATEGORY := "Brak kategorii"
 const ROLL_DURATION := 2.0
+const FINAL_ROUNDS_TO_WIN := 2
 
 var phase: Phase = Phase.NO_FLOOR
 var columns := 0
@@ -107,6 +115,14 @@ var duel_countdown := 0
 ## Pozostałe sekundy kary w stanie PENALTY.
 var duel_penalty_left := 0
 var _duel_deck: Array[Dictionary] = []
+## Kategoria aktualnie granej rundy (nazwa lub klucz "final:..." – patrz CategoryManager).
+var duel_category := ""
+## Finał: true, gdy pojedynek toczy się między dwoma ostatnimi graczami.
+var is_final := false
+## Numer rundy finału (1 = kategoria obrońcy, 2 = dogrywka, 3 = rozstrzygająca).
+var final_round := 0
+## Wygrane rundy finału: [ATTACKER_SIDE, DEFENDER_SIDE].
+var final_score := PackedInt32Array([0, 0])
 ## Czas, który upłynął w bieżącym kroku odliczania / kary (kroki co 1 s).
 var _duel_step_time := 0.0
 var _state_before_pause: DuelState = DuelState.RUNNING
@@ -313,6 +329,8 @@ func cancel_selection() -> void:
 		return
 	if phase == Phase.DUEL:
 		_end_duel()
+	is_final = false
+	final_round = 0
 	selected_player_id = -1
 	defender_id = -1
 	selected_is_duel_winner = false
@@ -356,26 +374,41 @@ func start_duel(target_player_id: int) -> void:
 		return
 
 	var category := get_player_category(target_player_id)
-	var deck := CategoryManager.get_questions(category)
-	if deck.is_empty():
+	if CategoryManager.get_questions(category).is_empty():
 		_log("Kategoria \"%s\" nie ma zdjęć ani utworów – wybierz innego przeciwnika." % category)
 		return
 
 	defender_id = target_player_id
+	is_final = get_alive_player_ids().size() == 2
+	final_round = 1 if is_final else 0
+	final_score = PackedInt32Array([0, 0])
+	if is_final:
+		_log("FINAŁ! Rundy do %d wygranych." % FINAL_ROUNDS_TO_WIN)
+	_start_round(category)
+	_set_phase(Phase.DUEL)
+
+
+## Przygotowuje (kolejną) rundę: nowa kategoria i talia, zegary od 45 s, czeka na START.
+func _start_round(category: String) -> void:
+	duel_category = category
+	var deck := CategoryManager.get_questions(category)
 	deck.shuffle()
 	_duel_deck = deck
-	CategoryManager.preload_file(_duel_deck.back()["path"])
+	if not _duel_deck.is_empty():
+		CategoryManager.preload_file(_duel_deck.back()["path"])
 	duel_image = {}
 	duel_times = PackedFloat32Array([DUEL_TIME, DUEL_TIME])
 	duel_active_side = ATTACKER_SIDE
 	duel_state = DuelState.READY
+	duel_countdown = 0
+	duel_penalty_left = 0
 
-	_log("POJEDYNEK: %s vs %s | kategoria: %s (%s)" % [
-		get_player_name(selected_player_id), get_player_name(defender_id), category,
-		CategoryManager.describe_question_count(category),
+	_log("%s: %s vs %s | kategoria: %s (%s)" % [
+		get_final_round_title() if is_final else "POJEDYNEK",
+		get_player_name(selected_player_id), get_player_name(defender_id),
+		get_duel_category_name(), CategoryManager.describe_question_count(category),
 	])
 	duel_started.emit(selected_player_id, defender_id)
-	_set_phase(Phase.DUEL)
 
 
 ## START: odliczanie 3-2-1, po nim pierwsze zdjęcie i zegar zaczynającego gracza.
@@ -437,6 +470,8 @@ func finish_duel() -> void:
 func resolve_duel(attacker_wins: bool) -> void:
 	if phase != Phase.DUEL:
 		return
+	if is_final and not _finish_final_round(attacker_wins):
+		return # Finał trwa – zaczęła się kolejna runda.
 
 	var winner_id := selected_player_id if attacker_wins else defender_id
 	var loser_id := defender_id if attacker_wins else selected_player_id
@@ -445,6 +480,8 @@ func resolve_duel(attacker_wins: bool) -> void:
 	# a zwycięzca (niezależnie od tego, kto wygrał) gra dalej kategorią ATAKUJĄCEGO.
 	var played_category := get_duel_category_name()
 	var attacker_category := get_player_category(selected_player_id)
+	is_final = false
+	final_round = 0
 	_end_duel()
 
 	for tile_index in captured:
@@ -471,6 +508,55 @@ func resolve_duel(attacker_wins: bool) -> void:
 		_set_phase(Phase.GAME_OVER)
 	else:
 		_set_phase(Phase.PLAYER_SELECTED)
+
+
+## Zapisuje wynik rundy finału. Zwraca true, gdy finał jest rozstrzygnięty
+## (ktoś ma [constant FINAL_ROUNDS_TO_WIN] wygrane), inaczej od razu startuje następną rundę.
+func _finish_final_round(attacker_wins: bool) -> bool:
+	var side := ATTACKER_SIDE if attacker_wins else DEFENDER_SIDE
+	var round_winner := get_duel_player_id(side)
+	final_score[side] += 1
+	_log("Finał – rundę %d wygrywa %s. Wynik %d:%d." % [
+		final_round, get_player_name(round_winner),
+		final_score[ATTACKER_SIDE], final_score[DEFENDER_SIDE],
+	])
+	final_round_finished.emit(round_winner, final_round)
+	if final_score[side] >= FINAL_ROUNDS_TO_WIN:
+		return true
+
+	var next_category := ""
+	if final_round == 1:
+		# Dogrywka: kategoria atakującego – jedyna jeszcze niewykorzystana.
+		next_category = get_player_category(selected_player_id)
+		if CategoryManager.get_questions(next_category).is_empty():
+			_log("Kategoria atakującego nie ma pytań – dogrywka z kategorii finałowej.")
+			next_category = _pick_final_category()
+	else:
+		# Remis 1:1 – runda rozstrzygająca z folderu "kategorie final".
+		next_category = _pick_final_category()
+	final_round += 1
+
+	if next_category.is_empty():
+		_log("Brak kategorii na kolejną rundę – rozstrzygnij finał ręcznie.")
+		next_category = duel_category
+	CategoryManager.clear_cache()
+	_start_round(next_category)
+	state_changed.emit()
+	return false
+
+
+## Losowa kategoria z folderu "kategorie final"; gdy pusty – zwykła kategoria,
+## która nie była grana w tym finale.
+func _pick_final_category() -> String:
+	var keys: Array = CategoryManager.get_final_category_keys()
+	if keys.is_empty():
+		_log("Folder \"%s\" jest pusty – losuję zwykłą kategorię." % CategoryManager.FINAL_CATEGORIES_DIR)
+		var played := [get_player_category(defender_id), get_player_category(selected_player_id), duel_category]
+		keys = CategoryManager.get_category_names().filter(
+			func(category_name: String) -> bool:
+				return category_name not in played and not CategoryManager.get_questions(category_name).is_empty()
+		)
+	return keys.pick_random() if not keys.is_empty() else ""
 
 
 func _process_countdown(delta: float) -> void:
@@ -526,7 +612,7 @@ func _advance_step(delta: float) -> bool:
 func _show_next_image(action: DuelAction) -> void:
 	var previous_answer: String = duel_image.get("answer", "")
 	if _duel_deck.is_empty():
-		_duel_deck = CategoryManager.get_questions(get_duel_category_name())
+		_duel_deck = CategoryManager.get_questions(duel_category)
 		_duel_deck.shuffle()
 		# Nie pokazuj tego samego zdjęcia dwa razy z rzędu po przetasowaniu.
 		if _duel_deck.size() > 1 and _duel_deck.back()["path"] == duel_image.get("path", ""):
@@ -552,6 +638,7 @@ func _on_duel_time_out() -> void:
 
 func _end_duel() -> void:
 	duel_state = DuelState.READY
+	duel_category = ""
 	duel_countdown = 0
 	duel_penalty_left = 0
 	duel_image = {}
@@ -595,14 +682,32 @@ func describe_player(player_id: int) -> String:
 	]
 
 
-## Kategoria pojedynku = kategoria obrońcy (jak w teleturnieju).
+## Nazwa granej kategorii DO WYŚWIETLENIA (zwykle kategoria obrońcy; w finale – kategoria rundy).
 func get_duel_category_name() -> String:
-	return get_player_category(defender_id) if defender_id >= 0 else "-"
+	if duel_category.is_empty():
+		return get_player_category(defender_id) if defender_id >= 0 else "-"
+	return CategoryManager.get_display_name(duel_category)
+
+
+## Klucz granej kategorii do zapytań w CategoryManager (pytania, tło, czy muzyczna).
+func get_duel_category_key() -> String:
+	return duel_category
 
 
 ## Czy pojedynek toczy się w kategorii muzycznej (pytania = utwory .ogg)?
 func is_duel_music() -> bool:
-	return CategoryManager.is_music_category(get_duel_category_name())
+	return CategoryManager.is_music_category(duel_category)
+
+
+## Np. "FINAŁ · DOGRYWKA" – podpis rundy finału na ekranach.
+func get_final_round_title() -> String:
+	match final_round:
+		1:
+			return "FINAŁ · RUNDA 1"
+		2:
+			return "FINAŁ · DOGRYWKA"
+		_:
+			return "FINAŁ · RUNDA ROZSTRZYGAJĄCA"
 
 
 func get_duel_player_id(side: int) -> int:

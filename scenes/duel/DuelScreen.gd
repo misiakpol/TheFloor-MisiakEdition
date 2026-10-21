@@ -31,6 +31,10 @@ var _feedback_tween: Tween
 var _pop_tween: Tween
 var _side_tweens: Array[Tween] = [null, null]
 
+## Imię zwycięzcy ostatnio rozstrzygniętej rundy finału (pokazywane przed kolejną rundą).
+var _last_round_winner := ""
+
+@onready var _duel_caption: Label = %DuelCaption
 @onready var _category_label: Label = %CategoryLabel
 @onready var _image_rect: TextureRect = %ImageRect
 @onready var _placeholder_label: Label = %PlaceholderLabel
@@ -64,6 +68,7 @@ func _ready() -> void:
 	GameManager.duel_penalty_ticked.connect(_on_penalty_ticked)
 	GameManager.duel_timeout.connect(_on_duel_timeout)
 	GameManager.duel_ended.connect(_on_duel_ended)
+	GameManager.final_round_finished.connect(_on_final_round_finished)
 	GameManager.state_changed.connect(_on_state_changed)
 
 
@@ -85,6 +90,19 @@ func _on_duel_started(attacker_id: int, defender_id: int) -> void:
 	_countdown_label.hide()
 	_hide_penalty(true)
 	_placeholder_label.text = "PRZYGOTUJCIE SIĘ!"
+	_duel_caption.text = "POJEDYNEK"
+	if GameManager.is_final:
+		# Np. "FINAŁ · DOGRYWKA  •  1 : 0" (wynik w rundach: lewy gracz : prawy gracz).
+		_duel_caption.text = "%s  •  %d : %d" % [
+			GameManager.get_final_round_title(),
+			GameManager.final_score[GameManager.ATTACKER_SIDE],
+			GameManager.final_score[GameManager.DEFENDER_SIDE],
+		]
+		if GameManager.final_round > 1:
+			_placeholder_label.text = "Rundę %d wygrywa %s!\n%s\nPRZYGOTUJCIE SIĘ!" % [
+				GameManager.final_round - 1, _last_round_winner,
+				"DOGRYWKA" if GameManager.final_round == 2 else "REMIS – RUNDA ROZSTRZYGAJĄCA",
+			]
 	_placeholder_label.show()
 
 	_update_times(GameManager.duel_times)
@@ -98,6 +116,12 @@ func _on_duel_started(attacker_id: int, defender_id: int) -> void:
 	else:
 		AudioManager.play_music(AudioManager.MUSIC_DUEL)
 	_fade_in()
+
+
+## Finał: runda rozstrzygnięta – zaraz przyjdzie duel_started kolejnej rundy (albo koniec gry).
+func _on_final_round_finished(round_winner_id: int, _round_number: int) -> void:
+	_last_round_winner = GameManager.get_player_name(round_winner_id)
+	AudioManager.play_sfx(AudioManager.SFX_CORRECT, 3.0)
 
 
 ## 3, 2 -> click, 1 -> beep. Zdjęcie pojawi się dopiero po "1".
@@ -116,7 +140,7 @@ func _on_duel_image_changed(image: Dictionary, previous_answer: String, action: 
 	var texture: Texture2D
 	if image.get("kind") == CategoryManager.KIND_MUSIC:
 		# Pytanie = utwór; na środku stały obrazek tła kategorii.
-		texture = CategoryManager.load_texture(CategoryManager.get_background(GameManager.get_duel_category_name()))
+		texture = CategoryManager.load_texture(CategoryManager.get_background(GameManager.get_duel_category_key()))
 		var stream := CategoryManager.load_audio(image.get("path", ""))
 		AudioManager.play_question(stream)
 		_placeholder_label.text = "JAKI TO UTWÓR?" if stream != null else "Nie udało się wczytać utworu"

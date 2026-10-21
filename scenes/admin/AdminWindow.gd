@@ -244,7 +244,7 @@ func _on_duel_image_changed(question: Dictionary, _previous_answer: String, _act
 	if question.get("kind") == CategoryManager.KIND_MUSIC:
 		_answer_caption.text = "POPRAWNA ODPOWIEDŹ (UTWÓR)"
 		_answer_preview.texture = CategoryManager.load_texture(
-				CategoryManager.get_background(GameManager.get_duel_category_name()))
+				CategoryManager.get_background(GameManager.get_duel_category_key()))
 	else:
 		_answer_caption.text = "POPRAWNA ODPOWIEDŹ"
 		_answer_preview.texture = CategoryManager.load_texture(question.get("path", ""))
@@ -425,9 +425,20 @@ func _refresh_duel_view() -> void:
 	var is_timeout := state == GameManager.DuelState.TIMEOUT
 
 	_duel_title_label.text = "%s  vs  %s" % [attacker_name, defender_name]
-	_duel_category_label.text = "Kategoria: %s%s" % [
-		GameManager.get_duel_category_name(), "  (muzyczna)" if GameManager.is_duel_music() else "",
+	if GameManager.is_final:
+		_duel_title_label.text = "%s\n%s  %d : %d  %s" % [
+			GameManager.get_final_round_title(), attacker_name,
+			GameManager.final_score[GameManager.ATTACKER_SIDE],
+			GameManager.final_score[GameManager.DEFENDER_SIDE], defender_name,
+		]
+	_duel_category_label.text = "Kategoria: %s%s%s" % [
+		GameManager.get_duel_category_name(),
+		"  (muzyczna)" if GameManager.is_duel_music() else "",
+		"  [kategoria finałowa]" if CategoryManager.is_final_category(GameManager.get_duel_category_key()) else "",
 	]
+	# W finale przycisk zamyka RUNDĘ (do 2 wygranych), a nie cały pojedynek.
+	var finish_what := "Koniec rundy" if GameManager.is_final else "Koniec pojedynku"
+	var wins_what := "wygrywa rundę" if GameManager.is_final else "wygrywa"
 
 	_start_duel_button.visible = is_ready
 	# Pauza działa też w trakcie odliczania 3-2-1 i kary za pas.
@@ -437,12 +448,13 @@ func _refresh_duel_view() -> void:
 	_pass_button.disabled = not is_running
 	_finish_duel_button.disabled = not is_timeout
 	if is_timeout:
-		_finish_duel_button.text = "Koniec pojedynku — %s wygrywa" % \
-				GameManager.get_player_name(GameManager.get_duel_winner_id())
+		_finish_duel_button.text = "%s — %s %s" % [
+			finish_what, GameManager.get_player_name(GameManager.get_duel_winner_id()), wins_what,
+		]
 	else:
-		_finish_duel_button.text = "Koniec pojedynku (gdy czyjś czas spadnie do zera)"
-	_attacker_wins_button.text = "%s wygrywa" % attacker_name
-	_defender_wins_button.text = "%s wygrywa" % defender_name
+		_finish_duel_button.text = "%s (gdy czyjś czas spadnie do zera)" % finish_what
+	_attacker_wins_button.text = "%s %s" % [attacker_name, wins_what]
+	_defender_wins_button.text = "%s %s" % [defender_name, wins_what]
 
 	if is_ready:
 		_answer_caption.text = "POPRAWNA ODPOWIEDŹ"

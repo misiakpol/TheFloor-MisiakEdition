@@ -12,6 +12,11 @@ extends Node
 ##    ├─ Take on me - a-ha.ogg <- nazwa pliku = poprawna odpowiedź
 ##    └─ ...
 ## [/codeblock]
+## Folder [code]kategorie final/[/code] ma identyczną strukturę, ale jego kategorie grane są
+## WYŁĄCZNIE w decydującej rundzie finału (przy remisie 1:1). Nie trafiają do listy kategorii
+## graczy. Ich klucz to [code]"final:" + nazwa[/code] (nazwy mogą powtarzać zwykłe kategorie),
+## a do wyświetlania służy [method get_display_name].
+##
 ## Pliki ładowane są w locie z dysku (bez systemu importu Godota) – można je podmieniać
 ## obok pliku .exe i przeskanować folder bez restartu gry.
 ## Plik [code].gdignore[/code] w folderze kategorii blokuje ich import w edytorze.
@@ -22,6 +27,9 @@ signal categories_loaded(count: int)
 signal load_failed(message: String)
 
 const CATEGORIES_DIR := "kategorie"
+const FINAL_CATEGORIES_DIR := "kategorie final"
+## Prefiks klucza kategorii finałowej (odróżnia ją od zwykłej o tej samej nazwie).
+const FINAL_PREFIX := "final:"
 const IMAGE_EXTENSIONS: PackedStringArray = ["png", "jpg", "jpeg", "webp", "bmp", "tga"]
 const AUDIO_EXTENSIONS: PackedStringArray = ["ogg"]
 const KIND_IMAGE := "image"
@@ -34,6 +42,8 @@ const MAX_IMAGE_SIZE := Vector2i(1920, 1080)
 ## a każde pytanie: [code]{ "answer": String, "path": String, "kind": KIND_IMAGE|KIND_MUSIC }[/code].
 ## [code]background[/code] – ścieżka obrazka tła kategorii muzycznej (lub pusta).
 var categories: Array[Dictionary] = []
+## Kategorie finałowe (te same pola; [code]name[/code] = klucz z [constant FINAL_PREFIX]).
+var final_categories: Array[Dictionary] = []
 
 ## Cache zasobów: absolutna ścieżka -> Texture2D / AudioStream.
 var _resource_cache: Dictionary = {}
@@ -65,26 +75,29 @@ func get_categories_dir() -> String:
 	return get_data_dir().path_join(CATEGORIES_DIR)
 
 
+func get_final_categories_dir() -> String:
+	return get_data_dir().path_join(FINAL_CATEGORIES_DIR)
+
+
 ## Skanuje folder kategorii od nowa. Można wywołać w trakcie gry (poza pojedynkiem).
 func reload() -> void:
 	clear_cache()
 	categories.clear()
+	final_categories.clear()
+
+	# Kategorie finałowe są opcjonalne – brak folderu to nie błąd.
+	var final_root := get_final_categories_dir()
+	_ensure_categories_dir(final_root)
+	final_categories = _scan_root(final_root, FINAL_PREFIX)
+	print("[CategoryManager] Kategorie finałowe: %d (%s)" % [final_categories.size(), final_root])
 
 	var root := get_categories_dir()
 	if not DirAccess.dir_exists_absolute(root):
-		DirAccess.make_dir_recursive_absolute(root)
+		_ensure_categories_dir(root)
 		_fail("Utworzono pusty folder kategorii: %s – dodaj do niego podfoldery ze zdjęciami." % root)
 		return
 
-	var folder_names := Array(DirAccess.get_directories_at(root))
-	folder_names.sort_custom(_natural_less)
-
-	for folder_name: String in folder_names:
-		if folder_name.begins_with("."):
-			continue
-		# Nazwa wyświetlana w formacie "proper" (Dworce Kolejowe); ścieżka zostaje oryginalna.
-		categories.append(_scan_category(root.path_join(folder_name), TextUtils.to_proper(folder_name)))
-
+	categories = _scan_root(root, "")
 	if categories.is_empty():
 		_fail("Folder %s nie zawiera żadnych podfolderów z kategoriami." % root)
 		return
@@ -93,11 +106,31 @@ func reload() -> void:
 	categories_loaded.emit(categories.size())
 
 
+## [param category_name] – nazwa zwykłej kategorii albo klucz finałowej ("final:...").
 func get_category(category_name: String) -> Dictionary:
-	for category in categories:
+	var pool := final_categories if is_final_category(category_name) else categories
+	for category in pool:
 		if category["name"] == category_name:
 			return category
 	return {}
+
+
+func is_final_category(category_name: String) -> bool:
+	return category_name.begins_with(FINAL_PREFIX)
+
+
+## Nazwa do wyświetlenia (bez prefiksu kategorii finałowej).
+func get_display_name(category_name: String) -> String:
+	return category_name.trim_prefix(FINAL_PREFIX)
+
+
+## Klucze kategorii finałowych, które mają pytania.
+func get_final_category_keys() -> Array[String]:
+	var keys: Array[String] = []
+	for category in final_categories:
+		if not category["questions"].is_empty():
+			keys.append(category["name"])
+	return keys
 
 
 func has_category(category_name: String) -> bool:
@@ -180,6 +213,30 @@ func clear_cache() -> void:
 	_preload_tasks.clear()
 	_preloaded.clear()
 	_resource_cache.clear()
+
+
+## Skanuje podfoldery [param root]; nazwy w formacie "proper" (Dworce Kolejowe),
+## poprzedzone [param key_prefix] (dla kategorii finałowych). Ścieżki zostają oryginalne.
+func _scan_root(root: String, key_prefix: String) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	if not DirAccess.dir_exists_absolute(root):
+		return result
+	var folder_names := Array(DirAccess.get_directories_at(root))
+	folder_names.sort_custom(_natural_less)
+	for folder_name: String in folder_names:
+		if folder_name.begins_with("."):
+			continue
+		result.append(_scan_category(root.path_join(folder_name), key_prefix + TextUtils.to_proper(folder_name)))
+	return result
+
+
+## Tworzy folder (jeśli go nie ma) razem z .gdignore, żeby edytor nie importował zdjęć.
+func _ensure_categories_dir(path: String) -> void:
+	if not DirAccess.dir_exists_absolute(path):
+		DirAccess.make_dir_recursive_absolute(path)
+	var gdignore := path.path_join(".gdignore")
+	if OS.has_feature("editor") and not FileAccess.file_exists(gdignore):
+		FileAccess.open(gdignore, FileAccess.WRITE)
 
 
 func _scan_category(path: String, category_name: String) -> Dictionary:
