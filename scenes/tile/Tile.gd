@@ -11,13 +11,14 @@ extends Control
 ## [br]- obrys podświetlenia biegnie wyłącznie po zewnętrznej krawędzi terytorium.
 ## Main przekazuje maskę sąsiadów przez [method set_neighbors].
 ##
-## Przejęcie pola to powolne "zalewanie" kolorem zwycięzcy od strony, z której przyszedł
-## (FillMask przycina ten sam kształt narysowany nowym kolorem do rosnącego prostokąta).
+## Przejęcie pola jest RADIALNE i wspólne dla całej strefy: CaptureLayer rysuje kształt
+## pola w kolorze zwycięzcy, a współdzielony ShaderMaterial (radial_capture.gdshader)
+## odsłania go tylko wewnątrz koła rosnącego ze środka pola zwycięzcy. Main animuje promień
+## jednego materiału, więc wszystkie przejmowane pola malują się jedną, ciągłą falą.
 ##
 ## [codeblock]
 ## Tile (Control)              – _draw(): tło w kolorze właściciela + "mostki" do sąsiadów
-## ├─ FillMask (Control, clip_contents) – rośnie w kierunku zalewania
-## │  └─ FillShape (Control)    – kształt pola w kolorze zwycięzcy
+## ├─ CaptureLayer (Control)    – kształt pola w kolorze zwycięzcy, przycinany shaderem
 ## ├─ Content (MarginContainer) – podpisy (widoczne tylko na jednym polu terytorium)
 ## │  └─ VBox
 ## │     ├─ %CategoryLabel
@@ -38,6 +39,8 @@ const NE := 16
 const SE := 32
 const SW := 64
 const NW := 128
+## O ile mostek do sąsiada zachodzi pod krawędź pola (zakrywa antyaliasing StyleBoxa).
+const SEAM_OVERLAP := 1.5
 
 const HIGHLIGHT_COLORS := {
 	HighlightStyle.SELECTED: Color("ffd166"),
@@ -74,14 +77,15 @@ var _shape_style := StyleBoxFlat.new()
 
 var _appear_tween: Tween
 var _highlight_tween: Tween
-var _capture_tween: Tween
 var _burst_tween: Tween
-var _fill_target_color := Color.WHITE
-## Kierunek zalewania: (1, 0) = od lewej do prawej, (0, 1) = z góry na dół itd.
-var _fill_direction := Vector2i.RIGHT
+var _capture_color := Color.WHITE
+## Maska sąsiadów PO przejęciu – kształt rysowany przez CaptureLayer.
+var _capture_neighbors := 0
+## W trakcie przejęcia podpisy są ukryte (pole ma jeszcze stary kolor).
+var _capturing := false
+var _labels_wanted := false
 
-@onready var _fill_mask: Control = $FillMask
-@onready var _fill_shape: Control = $FillMask/FillShape
+@onready var _capture_layer: Control = $CaptureLayer
 @onready var _content: Control = $Content
 @onready var _category_label: Label = %CategoryLabel
 @onready var _owner_label: Label = %OwnerLabel
@@ -92,8 +96,9 @@ var _fill_direction := Vector2i.RIGHT
 func _ready() -> void:
 	resized.connect(_on_resized)
 	_flash.draw.connect(func() -> void: _draw_shape(_flash, Color.WHITE))
-	_fill_shape.draw.connect(func() -> void: _draw_shape(_fill_shape, _fill_target_color))
-	_fill_mask.hide()
+	_capture_layer.draw.connect(
+			func() -> void: _draw_shape_with_mask(_capture_layer, _capture_color, _capture_neighbors))
+	_capture_layer.hide()
 	_highlight_layer.draw.connect(_draw_highlight)
 	_flash.modulate.a = 0.0
 	_highlight_layer.modulate.a = 0.0
@@ -125,6 +130,11 @@ func set_territory(owner_name: String, category_name: String, color: Color) -> v
 	fill_color = color
 
 
+## Zmiana kategorii właściciela (po pojedynku zwycięzca gra kategorią atakującego).
+func set_category(category_name: String) -> void:
+	_category_label.text = category_name
+
+
 ## [param mask] – bity [constant N], [constant E], ... dla sąsiadów tego samego gracza.
 func set_neighbors(mask: int) -> void:
 	if mask == _neighbors:
@@ -132,13 +142,14 @@ func set_neighbors(mask: int) -> void:
 	_neighbors = mask
 	queue_redraw()
 	_flash.queue_redraw()
-	_fill_shape.queue_redraw()
+	_capture_layer.queue_redraw()
 	_highlight_layer.queue_redraw()
 
 
 ## Podpisy pokazujemy tylko na jednym polu terytorium (Main wybiera pole najbliżej środka).
 func set_labels_visible(labels_visible: bool) -> void:
-	_content.visible = labels_visible
+	_labels_wanted = labels_visible
+	_content.visible = labels_visible and not _capturing
 
 
 ## Wejście kafelka: skala 0 -> 1 z elastycznym "odbiciem".
@@ -183,55 +194,46 @@ func play_selection_burst() -> void:
 		_burst_tween.tween_property(_flash, "modulate:a", 0.0, 0.22).set_ease(Tween.EASE_IN)
 
 
-## Przejęcie pola: po [param delay] s nowy kolor powoli "zalewa" pole przez [param duration] s,
-## postępując w kierunku [param direction] (od strony pola, z którego przyszło przejęcie).
-func capture(new_owner_name: String, new_category: String, new_color: Color,
-		delay: float, direction: Vector2i, duration: float) -> void:
-	_kill(_capture_tween)
-	_capture_tween = create_tween()
-	if delay > 0.0:
-		_capture_tween.tween_interval(delay)
-	_capture_tween.tween_callback(_begin_fill.bind(new_owner_name, new_category, new_color, direction))
-	_capture_tween.tween_method(_set_fill_progress, 0.0, 1.0, duration) \
-		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	_capture_tween.tween_callback(_end_fill)
+## Start radialnego przejęcia. Tło pola (stary kolor, stara maska, stare szczeliny) zostaje
+## bez zmian, a NAD nim CaptureLayer rysuje kształt pola po scaleniu ([param merged_mask])
+## w kolorze zwycięzcy, odsłaniany przez [param radial_material] (wspólny dla całej strefy).
+## Wywoływane też dla dotychczasowych pól zwycięzcy – ich nakładka zamyka szczeliny
+## i prostuje narożniki dokładnie wtedy, gdy dociera do nich fala.
+## [param is_new_tile] = pole przechodzi do zwycięzcy (ukrywamy stare podpisy).
+func begin_capture(new_owner_name: String, new_category: String, new_color: Color,
+		radial_material: ShaderMaterial, merged_mask: int, is_new_tile: bool) -> void:
+	if is_new_tile:
+		_owner_label.text = new_owner_name
+		_category_label.text = new_category
+		_content.visible = false
+	_capture_color = new_color
+	_capture_neighbors = merged_mask
+	_capturing = is_new_tile
+	_capture_layer.material = radial_material
+	_capture_layer.queue_redraw()
+	_capture_layer.show()
 
 
-func _begin_fill(new_owner_name: String, new_category: String, new_color: Color, direction: Vector2i) -> void:
-	_owner_label.text = new_owner_name
-	_category_label.text = new_category
-	_fill_target_color = new_color
-	_fill_direction = direction if direction != Vector2i.ZERO else Vector2i.RIGHT
-	_set_fill_progress(0.0)
-	_fill_shape.queue_redraw()
-	_fill_mask.show()
-
-
-## Rośnie prostokąt przycinający nowy kolor. Obejmuje też połówki szczelin (mostki do sąsiadów).
-func _set_fill_progress(progress: float) -> void:
-	var half_gap := _gap * 0.5
-	var full := Rect2(-half_gap, -half_gap, size.x + _gap, size.y + _gap)
-	var rect := full
-	if _fill_direction.x != 0:
-		rect.size.x = full.size.x * progress
-		if _fill_direction.x < 0:
-			rect.position.x = full.end.x - rect.size.x
-	else:
-		rect.size.y = full.size.y * progress
-		if _fill_direction.y < 0:
-			rect.position.y = full.end.y - rect.size.y
-	_fill_mask.position = rect.position
-	_fill_mask.size = rect.size
-	# FillShape rysuje we współrzędnych kafelka niezależnie od położenia maski.
-	_fill_shape.position = -rect.position
-
-
-func _end_fill() -> void:
-	fill_color = _fill_target_color
-	_fill_mask.hide()
+## Koniec przejęcia: kolor zostaje na stałe w tle pola, warstwa i shader znikają.
+func finish_capture() -> void:
+	if _capture_layer.material == null:
+		return
+	fill_color = _capture_color
+	_capturing = false
+	_capture_layer.hide()
+	_capture_layer.material = null
+	_content.visible = _labels_wanted
 
 
 #region Rysowanie kształtu
+
+## Kształt narysowany z INNĄ maską sąsiadów (warstwa przejęcia rysuje kształt "po scaleniu").
+func _draw_shape_with_mask(canvas: CanvasItem, color: Color, mask: int) -> void:
+	var current_mask := _neighbors
+	_neighbors = mask
+	_draw_shape(canvas, color)
+	_neighbors = current_mask
+
 
 ## Tło pola + "mostki" do sąsiadów tego samego gracza. Używane przez tło i błysk.
 func _draw_shape(canvas: CanvasItem, color: Color) -> void:
@@ -243,15 +245,17 @@ func _draw_shape(canvas: CanvasItem, color: Color) -> void:
 	_shape_style.corner_radius_bottom_left = _outer_corner_radius(S, W)
 	canvas.draw_style_box(_shape_style, Rect2(Vector2.ZERO, size))
 
-	# Połowa szczeliny w stronę sąsiada (drugą połowę rysuje sąsiad).
+	# Połowa szczeliny w stronę sąsiada (drugą połowę rysuje sąsiad). Mostek wchodzi
+	# SEAM_OVERLAP px pod krawędź pola, zakrywając wygładzoną (półprzezroczystą) krawędź
+	# StyleBoxa – inaczej w scalonym terytorium widać cienką kreskę.
 	if _is_linked(N):
-		canvas.draw_rect(Rect2(0.0, -half_gap, size.x, half_gap), color)
+		canvas.draw_rect(Rect2(0.0, -half_gap, size.x, half_gap + SEAM_OVERLAP), color)
 	if _is_linked(S):
-		canvas.draw_rect(Rect2(0.0, size.y, size.x, half_gap), color)
+		canvas.draw_rect(Rect2(0.0, size.y - SEAM_OVERLAP, size.x, half_gap + SEAM_OVERLAP), color)
 	if _is_linked(W):
-		canvas.draw_rect(Rect2(-half_gap, 0.0, half_gap, size.y), color)
+		canvas.draw_rect(Rect2(-half_gap, 0.0, half_gap + SEAM_OVERLAP, size.y), color)
 	if _is_linked(E):
-		canvas.draw_rect(Rect2(size.x, 0.0, half_gap, size.y), color)
+		canvas.draw_rect(Rect2(size.x - SEAM_OVERLAP, 0.0, half_gap + SEAM_OVERLAP, size.y), color)
 
 	# Ćwiartki skrzyżowań szczelin – tylko gdy cały blok 2x2 należy do jednego gracza,
 	# inaczej w wklęsłym narożniku "L" powstałby wystający ząbek.

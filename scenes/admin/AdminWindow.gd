@@ -21,6 +21,9 @@ const INACTIVE_COLOR := Color(0.55, 0.57, 0.7)
 const DANGER_COLOR := Color("ef476f")
 const RANDOM_CATEGORY_TEXT := "(losowa kategoria)"
 
+## Ostatnia liczba graczy ustawiona automatycznie z listy (do wykrycia ręcznej zmiany).
+var _synced_player_count := GameManager.MIN_PLAYERS
+
 @onready var _tabs: TabContainer = %Tabs
 @onready var _game_view: Control = %GameView
 @onready var _duel_view: Control = %DuelView
@@ -37,9 +40,8 @@ const RANDOM_CATEGORY_TEXT := "(losowa kategoria)"
 @onready var _clear_players_button: Button = %ClearPlayersButton
 
 # Podłoga, kategorie, głośność
-@onready var _columns_spin: SpinBox = %ColumnsSpin
-@onready var _rows_spin: SpinBox = %RowsSpin
-@onready var _fit_grid_button: Button = %FitGridButton
+@onready var _player_count_spin: SpinBox = %PlayerCountSpin
+@onready var _grid_preview_label: Label = %GridPreviewLabel
 @onready var _shuffle_check: CheckBox = %ShuffleCheck
 @onready var _generate_button: Button = %GenerateButton
 @onready var _category_count_label: Label = %CategoryCountLabel
@@ -81,9 +83,8 @@ const RANDOM_CATEGORY_TEXT := "(losowa kategoria)"
 func _ready() -> void:
 	_tabs.set_tab_title(SETUP_TAB, "Konfiguracja")
 	_tabs.set_tab_title(GAME_TAB, "Rozgrywka / Pojedynek")
-	for spin: SpinBox in [_columns_spin, _rows_spin]:
-		spin.min_value = GameManager.MIN_GRID_SIZE
-		spin.max_value = GameManager.MAX_GRID_SIZE
+	_player_count_spin.min_value = GameManager.MIN_PLAYERS
+	_player_count_spin.max_value = GameManager.MAX_PLAYERS
 
 	var confirm_keys: Array[Key] = [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE]
 	_start_duel_button.shortcut = _make_shortcut(confirm_keys)
@@ -113,12 +114,12 @@ func _connect_ui_signals() -> void:
 	_clear_players_button.pressed.connect(GameManager.clear_roster)
 	_player_list.item_selected.connect(_on_player_list_item_selected)
 
-	_fit_grid_button.pressed.connect(_on_fit_grid_pressed)
+	_player_count_spin.value_changed.connect(_on_player_count_changed)
 	_generate_button.pressed.connect(_on_generate_pressed)
 	_reload_button.pressed.connect(CategoryManager.reload)
 	_random_player_button.pressed.connect(GameManager.select_random_player)
 	_duel_button.pressed.connect(_on_duel_pressed)
-	_cancel_button.pressed.connect(GameManager.cancel_selection)
+	_cancel_button.pressed.connect(_on_cancel_pressed)
 
 	_start_duel_button.pressed.connect(GameManager.begin_duel)
 	_pause_button.pressed.connect(GameManager.toggle_duel_pause)
@@ -186,14 +187,29 @@ func _on_player_list_item_selected(index: int) -> void:
 	_refresh_player_buttons()
 
 
-func _on_fit_grid_pressed() -> void:
-	var grid_size := GameManager.suggest_grid_size(maxi(GameManager.roster.size(), 4))
-	_columns_spin.value = grid_size.x
-	_rows_spin.value = grid_size.y
+## Liczba graczy nie może spaść poniżej listy; podgląd pokazuje, jaka wyjdzie siatka.
+func _on_player_count_changed(value: float) -> void:
+	var minimum := maxi(GameManager.roster.size(), GameManager.MIN_PLAYERS)
+	if value < minimum:
+		_player_count_spin.set_value_no_signal(minimum)
+	var count := int(_player_count_spin.value)
+	var grid := GameManager.get_grid_size_for(count)
+	_grid_preview_label.text = "siatka %d x %d" % [grid.x, grid.y]
+	var empty := grid.x * grid.y - count
+	if empty > 0:
+		_grid_preview_label.text += " (%d pust%s)" % [empty, "e" if empty < 5 else "ych"]
 
 
 func _on_generate_pressed() -> void:
-	GameManager.generate_floor(int(_columns_spin.value), int(_rows_spin.value), _shuffle_check.button_pressed)
+	GameManager.generate_floor(int(_player_count_spin.value), _shuffle_check.button_pressed)
+
+
+## Po wygranym pojedynku ten przycisk to "zejście z podłogi" (wyklucza z najbliższego losowania).
+func _on_cancel_pressed() -> void:
+	if GameManager.selected_is_duel_winner:
+		GameManager.step_down()
+	else:
+		GameManager.cancel_selection()
 
 
 func _on_duel_pressed() -> void:
@@ -256,20 +272,38 @@ func _refresh_ui() -> void:
 	_opponent_option.disabled = not is_selected or _opponent_option.item_count == 0
 	_duel_button.disabled = _opponent_option.disabled
 	_cancel_button.disabled = not is_selected
+	_cancel_button.text = "Zwycięzca schodzi z podłogi" if GameManager.selected_is_duel_winner else "Anuluj wybór"
 	_status_label.text = _describe_state(phase)
 
 
 func _describe_state(phase: int) -> String:
 	if phase == GameManager.Phase.IDLE:
-		return "Żywych graczy: %d. Wylosuj gracza." % GameManager.get_alive_player_ids().size()
+		return "Żywych graczy: %d. Wylosuj gracza.\n%s" % [
+			GameManager.get_alive_player_ids().size(), _describe_roll_pool(),
+		]
 	if phase == GameManager.Phase.ROLLING:
 		return "Trwa losowanie (ruletka na ekranie TV)..."
 	if phase == GameManager.Phase.PLAYER_SELECTED:
+		if GameManager.selected_is_duel_winner:
+			return "Zwycięzca: %s\nWalczy dalej (wybierz sąsiada) albo schodzi z podłogi." % \
+					GameManager.describe_player(GameManager.selected_player_id)
 		return "Na ruchu: %s\nWybierz sąsiada do pojedynku." % \
 				GameManager.describe_player(GameManager.selected_player_id)
 	if phase == GameManager.Phase.GAME_OVER:
 		return "Koniec gry! Wygeneruj nową podłogę (zakładka Konfiguracja)."
 	return "Dodaj graczy, ustaw wymiary i wygeneruj podłogę (zakładka Konfiguracja)."
+
+
+## Kto jest w puli ruletki (priorytet: gracze bez pojedynku; bez tego, kto zszedł z podłogi).
+func _describe_roll_pool() -> String:
+	var pool := GameManager.get_roll_pool()
+	var fresh := pool.all(func(id: int) -> bool: return GameManager.get_player_duel_count(id) == 0)
+	var text := "Pula losowania: %d (%s)" % [
+		pool.size(), "jeszcze bez pojedynku" if fresh else "wszyscy już walczyli",
+	]
+	if GameManager.last_stepped_down_player >= 0:
+		text += ", bez: %s" % GameManager.get_player_name(GameManager.last_stepped_down_player)
+	return text
 
 
 func _populate_opponents() -> void:
@@ -312,6 +346,12 @@ func _populate_player_list() -> void:
 			_player_list.set_item_tooltip(index, "Brak folderu tej kategorii – gracz dostanie losową.")
 
 	_player_count_label.text = "Graczy na liście: %d" % GameManager.roster.size()
+	# Liczba graczy na podłodze nadąża za listą, chyba że admin ręcznie ją zwiększył.
+	var roster_count := maxi(GameManager.roster.size(), GameManager.MIN_PLAYERS)
+	if int(_player_count_spin.value) == _synced_player_count or _player_count_spin.value < roster_count:
+		_player_count_spin.value = roster_count
+	_synced_player_count = roster_count
+	_on_player_count_changed(_player_count_spin.value)
 	_refresh_player_buttons()
 
 

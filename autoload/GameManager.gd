@@ -8,7 +8,13 @@ extends Node
 ## Model danych:
 ## - [member roster]: gracze wpisani ręcznie w konsoli admina (imię + kategoria),
 ## - [member players]: gracze bieżącej podłogi (id == indeks), każdy z kolorem i kategorią,
-## - [member tile_owners]: dla każdego pola – id gracza, który je posiada.
+## - [member tile_owners]: dla każdej komórki siatki – id gracza, który ją posiada,
+##   albo [constant EMPTY_CELL] (puste miejsca w ostatnim, wyśrodkowanym rzędzie).
+## Siatka dopasowuje się do liczby graczy: kolumny = ceil(sqrt(n)), niepełny ostatni rząd
+## jest wyśrodkowany.
+##
+## Ruletka losuje w pierwszej kolejności graczy bez żadnego pojedynku na koncie i nigdy
+## nie losuje gracza, który przed chwilą zszedł z podłogi ([member last_stepped_down_player]).
 ## Wygrany pojedynek przenosi WSZYSTKIE pola przegranego na zwycięzcę, a przegrany odpada.
 ##
 ## Pojedynek (faza DUEL) też jest liczony tutaj – zegary, talia zdjęć i to, kto odpowiada –
@@ -54,8 +60,10 @@ enum Phase { NO_FLOOR, IDLE, ROLLING, PLAYER_SELECTED, DUEL, GAME_OVER }
 enum DuelState { READY, COUNTDOWN, RUNNING, PENALTY, PAUSED, TIMEOUT }
 enum DuelAction { START, CORRECT, PASS }
 
-const MIN_GRID_SIZE := 2
-const MAX_GRID_SIZE := 12
+const MIN_PLAYERS := 2
+const MAX_PLAYERS := 100
+## Wartość w [member tile_owners] dla komórki bez pola (puste miejsce w ostatnim rzędzie).
+const EMPTY_CELL := -1
 const NEIGHBOR_OFFSETS := [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]
 const ATTACKER_SIDE := 0 ## Lewa strona ekranu pojedynku.
 const DEFENDER_SIDE := 1 ## Prawa strona ekranu pojedynku.
@@ -73,13 +81,18 @@ var rows := 0
 ## Gracze przygotowani przed wygenerowaniem podłogi: [code]{ name, category }[/code].
 ## Pusta kategoria = losowa.
 var roster: Array[Dictionary] = []
-## Każdy gracz: [code]{ id, name, color, category: String, alive }[/code]
+## Każdy gracz: [code]{ id, name, color, category: String, alive, duels: int }[/code]
+## ([code]duels[/code] – w ilu rozstrzygniętych pojedynkach brał udział).
 var players: Array[Dictionary] = []
-## Indeks pola -> id właściciela.
+## Indeks komórki -> id właściciela (lub [constant EMPTY_CELL]).
 var tile_owners: PackedInt32Array = PackedInt32Array()
 
 var selected_player_id := -1
 var defender_id := -1
+## Zwycięzca, który zszedł z podłogi – wykluczony z najbliższego losowania (-1 = nikt).
+var last_stepped_down_player := -1
+## Czy gracz "na ruchu" właśnie wygrał pojedynek (może walczyć dalej albo zejść z podłogi).
+var selected_is_duel_winner := false
 ## Unieważnia opóźnione zakończenie starej ruletki (np. po wygenerowaniu nowej podłogi).
 var _roll_id := 0
 
@@ -114,7 +127,7 @@ func _process(delta: float) -> void:
 #region Gracze (przed wygenerowaniem podłogi)
 
 func add_roster_player(player_name: String, category: String) -> bool:
-	var clean_name := player_name.strip_edges()
+	var clean_name := TextUtils.to_proper(player_name) # "jan kowalski" -> "Jan Kowalski"
 	if not _is_valid_roster_name(clean_name, -1):
 		return false
 	roster.append({ "name": clean_name, "category": category })
@@ -126,7 +139,7 @@ func add_roster_player(player_name: String, category: String) -> bool:
 func update_roster_player(index: int, player_name: String, category: String) -> bool:
 	if index < 0 or index >= roster.size():
 		return false
-	var clean_name := player_name.strip_edges()
+	var clean_name := TextUtils.to_proper(player_name) # "jan kowalski" -> "Jan Kowalski"
 	if not _is_valid_roster_name(clean_name, index):
 		return false
 	roster[index] = { "name": clean_name, "category": category }
@@ -151,43 +164,47 @@ func clear_roster() -> void:
 	roster_changed.emit()
 
 
-## Proponowany rozmiar siatki dla [param player_count] graczy: jak najmniej pustych
-## (dopełnianych automatycznie) pól i proporcje zbliżone do ekranu TV.
-func suggest_grid_size(player_count: int) -> Vector2i:
-	var best := Vector2i(MAX_GRID_SIZE, MAX_GRID_SIZE)
-	var best_score := INF
-	for c in range(MIN_GRID_SIZE, MAX_GRID_SIZE + 1):
-		var r := clampi(ceili(float(player_count) / c), MIN_GRID_SIZE, MAX_GRID_SIZE)
-		var free_tiles := c * r - player_count
-		if free_tiles < 0:
-			continue
-		var score := free_tiles + absf(float(c) / r - 1.6) * 2.0
-		if score < best_score:
-			best_score = score
-			best = Vector2i(c, r)
-	return best
+## Wymiary siatki dla [param player_count] graczy: kolumny = ceil(sqrt(n)),
+## wiersze = ile trzeba (np. 13 -> 4 x 4, 17 -> 5 x 4).
+func get_grid_size_for(player_count: int) -> Vector2i:
+	var count := maxi(player_count, 1)
+	var grid_columns := ceili(sqrt(float(count)))
+	return Vector2i(grid_columns, ceili(float(count) / grid_columns))
+
+
+## Indeksy komórek, w których stoją pola: wszystkie pełne rzędy + wyśrodkowany ostatni rząd.
+## Przy nieparzystej różnicy ostatni rząd przesuwa się o pół pola w lewo (siatka jest dyskretna).
+func get_playable_cells(player_count: int) -> Array[int]:
+	var grid := get_grid_size_for(player_count)
+	var cells: Array[int] = []
+	for i in (grid.y - 1) * grid.x:
+		cells.append(i)
+	var last_row_count := player_count - (grid.y - 1) * grid.x
+	@warning_ignore("integer_division")
+	var offset := (grid.x - last_row_count) / 2
+	for k in last_row_count:
+		cells.append((grid.y - 1) * grid.x + offset + k)
+	return cells
 
 #endregion
 
 
 #region Akcje podłogi (wywoływane przez panel admina)
 
-## Tworzy podłogę z graczy z [member roster]. Pola ponad liczbę graczy dostają
-## automatycznych graczy ("Gracz N") z losową, jeszcze niezajętą kategorią.
-func generate_floor(new_columns: int, new_rows: int, shuffle_positions := true) -> void:
+## Tworzy podłogę dla [param player_count] graczy (nie mniej niż jest na liście).
+## Gracze ponad listę to automatyczni "Gracz N" z losową, jeszcze niezajętą kategorią.
+func generate_floor(player_count: int, shuffle_positions := true) -> void:
 	if phase == Phase.DUEL:
 		_log("Najpierw zakończ pojedynek.")
 		return
-
-	var new_cols := clampi(new_columns, MIN_GRID_SIZE, MAX_GRID_SIZE)
-	var new_rws := clampi(new_rows, MIN_GRID_SIZE, MAX_GRID_SIZE)
-	var tile_count := new_cols * new_rws
-	if roster.size() > tile_count:
-		_log("Za mało pól (%d) dla %d graczy – powiększ podłogę." % [tile_count, roster.size()])
+	if roster.size() > MAX_PLAYERS:
+		_log("Maksymalnie %d graczy na podłodze." % MAX_PLAYERS)
 		return
 
-	columns = new_cols
-	rows = new_rws
+	var tile_count := clampi(maxi(player_count, roster.size()), MIN_PLAYERS, MAX_PLAYERS)
+	var grid := get_grid_size_for(tile_count)
+	columns = grid.x
+	rows = grid.y
 	players.clear()
 
 	var used_categories: Array[String] = []
@@ -215,20 +232,24 @@ func generate_floor(new_columns: int, new_rows: int, shuffle_positions := true) 
 			"color": _make_player_color(i),
 			"category": category,
 			"alive": true,
+			"duels": 0,
 		})
 
-	var positions := range(tile_count)
+	var cells := get_playable_cells(tile_count)
 	if shuffle_positions:
-		positions.shuffle()
-	tile_owners.resize(tile_count)
+		cells.shuffle()
+	tile_owners.resize(columns * rows)
+	tile_owners.fill(EMPTY_CELL)
 	for player_id in tile_count:
-		tile_owners[positions[player_id]] = player_id
+		tile_owners[cells[player_id]] = player_id
 
 	selected_player_id = -1
 	defender_id = -1
+	last_stepped_down_player = -1
+	selected_is_duel_winner = false
 	_roll_id += 1
-	_log("Wygenerowano podłogę %d x %d: %d graczy z listy + %d automatycznych." % [
-		columns, rows, roster.size(), tile_count - roster.size(),
+	_log("Wygenerowano podłogę dla %d graczy (siatka %d x %d): %d z listy + %d automatycznych." % [
+		tile_count, columns, rows, roster.size(), tile_count - roster.size(),
 	])
 	for player in players:
 		if CategoryManager.get_questions(player["category"]).is_empty():
@@ -240,20 +261,22 @@ func generate_floor(new_columns: int, new_rows: int, shuffle_positions := true) 
 	_set_phase(Phase.IDLE)
 
 
+## Ruletka. Jeśli na ruchu jest zwycięzca pojedynku, nowe losowanie oznacza, że zszedł z podłogi.
 func select_random_player() -> void:
 	if phase not in [Phase.IDLE, Phase.PLAYER_SELECTED]:
 		_log("Nie można teraz losować gracza.")
 		return
+	if phase == Phase.PLAYER_SELECTED and selected_is_duel_winner:
+		_mark_stepped_down(selected_player_id)
 
-	var candidates := get_alive_player_ids().filter(
-		func(id: int) -> bool: return not get_neighbor_player_ids(id).is_empty()
-	)
+	var candidates := get_roll_pool()
 	if candidates.is_empty():
 		_log("Brak graczy, którzy mogą walczyć.")
 		return
 
-	# Wynik znany od razu; ekran TV pokazuje go po animacji ruletki.
+	# Wynik znany od razu; ekran TV pokazuje go po animacji ruletki (skacząc po tej samej puli).
 	var winner_id: int = candidates.pick_random()
+	selected_is_duel_winner = false
 	selected_player_id = -1
 	defender_id = -1
 	_roll_id += 1
@@ -266,9 +289,23 @@ func _finish_roll(roll_id: int, winner_id: int) -> void:
 	if roll_id != _roll_id or phase != Phase.ROLLING:
 		return
 	selected_player_id = winner_id
+	# Wykluczenie obowiązuje tylko w jednym, bezpośrednio następnym losowaniu.
+	last_stepped_down_player = -1
 	_log("Wylosowano: %s" % describe_player(selected_player_id))
 	player_selected.emit(selected_player_id)
 	_set_phase(Phase.PLAYER_SELECTED)
+
+
+## Zwycięzca pojedynku rezygnuje z dalszej walki i wraca na planszę.
+## Nie może zostać wylosowany w najbliższym losowaniu.
+func step_down() -> void:
+	if phase != Phase.PLAYER_SELECTED or not selected_is_duel_winner:
+		return
+	_mark_stepped_down(selected_player_id)
+	selected_is_duel_winner = false
+	selected_player_id = -1
+	selection_cleared.emit()
+	_set_phase(Phase.IDLE)
 
 
 func cancel_selection() -> void:
@@ -278,9 +315,30 @@ func cancel_selection() -> void:
 		_end_duel()
 	selected_player_id = -1
 	defender_id = -1
+	selected_is_duel_winner = false
 	_log("Anulowano wybór.")
 	selection_cleared.emit()
 	_set_phase(Phase.IDLE)
+
+
+## Pula ruletki: żywi gracze z sąsiadem, bez gracza, który właśnie zszedł z podłogi.
+## Jeśli są wśród nich gracze bez żadnego pojedynku – losujemy tylko spośród nich.
+func get_roll_pool() -> Array[int]:
+	var can_fight := get_alive_player_ids().filter(
+		func(id: int) -> bool: return not get_neighbor_player_ids(id).is_empty()
+	)
+	var pool := can_fight.filter(func(id: int) -> bool: return id != last_stepped_down_player)
+	if pool.is_empty():
+		pool = can_fight # Został tylko on – i tak musi walczyć.
+	var fresh := pool.filter(func(id: int) -> bool: return get_player_duel_count(id) == 0)
+	var result: Array[int] = []
+	result.assign(fresh if not fresh.is_empty() else pool)
+	return result
+
+
+func _mark_stepped_down(player_id: int) -> void:
+	last_stepped_down_player = player_id
+	_log("%s schodzi z podłogi – nie weźmie udziału w najbliższym losowaniu." % get_player_name(player_id))
 
 #endregion
 
@@ -383,13 +441,24 @@ func resolve_duel(attacker_wins: bool) -> void:
 	var winner_id := selected_player_id if attacker_wins else defender_id
 	var loser_id := defender_id if attacker_wins else selected_player_id
 	var captured := get_tiles_of(loser_id)
+	# Zasada kategorii: grana była kategoria obrońcy – po pojedynku znika ona z gry,
+	# a zwycięzca (niezależnie od tego, kto wygrał) gra dalej kategorią ATAKUJĄCEGO.
+	var played_category := get_duel_category_name()
+	var attacker_category := get_player_category(selected_player_id)
 	_end_duel()
 
 	for tile_index in captured:
 		tile_owners[tile_index] = winner_id
 	players[loser_id]["alive"] = false
+	players[winner_id]["duels"] += 1
+	players[loser_id]["duels"] += 1
+	players[winner_id]["category"] = attacker_category
+	_log("Kategoria \"%s\" zagrana i usunięta; %s gra teraz kategorią \"%s\"." % [
+		played_category, get_player_name(winner_id), attacker_category,
+	])
 
 	selected_player_id = winner_id
+	selected_is_duel_winner = true
 	defender_id = -1
 	_log("%s przejmuje terytorium gracza %s (+%d pól)." % [
 		get_player_name(winner_id), get_player_name(loser_id), captured.size(),
@@ -509,6 +578,10 @@ func get_player_color(player_id: int) -> Color:
 	return get_player(player_id).get("color", Color.GRAY)
 
 
+func get_player_duel_count(player_id: int) -> int:
+	return get_player(player_id).get("duels", 0)
+
+
 func get_player_category(player_id: int) -> String:
 	return get_player(player_id).get("category", "-")
 
@@ -517,7 +590,9 @@ func describe_player(player_id: int) -> String:
 	var player := get_player(player_id)
 	if player.is_empty():
 		return "-"
-	return "%s (%s, pól: %d)" % [player["name"], player["category"], get_tiles_of(player_id).size()]
+	return "%s (%s, pól: %d, pojedynków: %d)" % [
+		player["name"], player["category"], get_tiles_of(player_id).size(), player["duels"],
+	]
 
 
 ## Kategoria pojedynku = kategoria obrońcy (jak w teleturnieju).
@@ -578,7 +653,7 @@ func get_neighbor_tiles(tile_index: int) -> Array[int]:
 	var cell := index_to_cell(tile_index)
 	for offset: Vector2i in NEIGHBOR_OFFSETS:
 		var neighbor := cell + offset
-		if is_cell_inside(neighbor):
+		if is_cell_inside(neighbor) and tile_owners[cell_to_index(neighbor)] != EMPTY_CELL:
 			result.append(cell_to_index(neighbor))
 	return result
 

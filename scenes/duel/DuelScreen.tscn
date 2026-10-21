@@ -46,6 +46,7 @@ corner_radius_bottom_right = 18
 corner_radius_bottom_left = 18
 
 [node name="DuelScreen" type="Control"]
+z_index = 10
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -104,8 +105,7 @@ theme_override_constants/outline_size = 10
 theme_override_font_sizes/font_size = 64
 text = "KATEGORIA"
 horizontal_alignment = 1
-clip_text = true
-text_overrun_behavior = 3
+autowrap_mode = 3
 
 [node name="Body" type="HBoxContainer" parent="Margin/VBox"]
 layout_mode = 2
@@ -181,12 +181,13 @@ autowrap_mode = 3
 unique_name_in_owner = true
 modulate = Color(1, 1, 1, 0)
 layout_mode = 2
-size_flags_horizontal = 4
+size_flags_horizontal = 3
 size_flags_vertical = 8
 theme_override_font_sizes/font_size = 46
 theme_override_styles/normal = SubResource("StyleBox_feedback")
 text = "Odpowiedź"
 horizontal_alignment = 1
+autowrap_mode = 3
 
 [node name="CountdownLabel" type="Label" parent="Margin/VBox/Body/ImageFrame"]
 unique_name_in_owner = true
@@ -204,7 +205,7 @@ vertical_alignment = 1
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-size_flags_horizontal = 4
+size_flags_horizontal = 3
 size_flags_vertical = 4
 mouse_filter = 2
 theme_override_constants/separation = 0
@@ -238,6 +239,7 @@ theme_override_font_sizes/font_size = 64
 theme_override_styles/normal = SubResource("StyleBox_feedback")
 text = "Odpowiedź"
 horizontal_alignment = 1
+autowrap_mode = 3
 
 [node name="PauseLabel" type="Label" parent="Margin/VBox/Body/ImageFrame"]
 unique_name_in_owner = true

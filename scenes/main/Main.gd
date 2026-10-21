@@ -4,9 +4,12 @@ extends Control
 ##
 ## Nie posiada logiki zasad – reaguje tylko na sygnały GameManagera.
 ## Trzyma własną kopię właścicieli pól ([member _displayed_owners]), która nadąża za
-## animacją przejęcia – pole dołącza do terytorium zwycięzcy, gdy zaczyna się jego
-## "zalewanie". Zalewanie idzie pierścieniami od strony zwycięzcy w głąb terytorium
-## przegranego (każde pole od boku sąsiada, z którego przyszło).
+## animacją przejęcia.
+## Przejęcie jest RADIALNE: cała przejmowana strefa maluje się jednocześnie kołem, które
+## rośnie (3 s) ze środka pola zwycięzcy – jeden wspólny ShaderMaterial
+## (radial_capture.gdshader) na wszystkich przejmowanych polach, animowany promień.
+## Siatka ma dowolną liczbę graczy: puste komórki (EMPTY_CELL) to niewidoczne wypełniacze,
+## dzięki którym niepełny ostatni rząd jest wyśrodkowany.
 ## Losowanie gracza to ruletka: podświetlenie skacze po graczach, zwalniając (ease out).
 ## Dodatkowo ustawia okna: siebie na drugim monitorze (fullscreen),
 ## a dziecko-okno AdminWindow na pierwszym monitorze.
@@ -14,10 +17,11 @@ extends Control
 ## (gaszona przez AudioManager po 60 s albo przy nowej podłodze).
 
 const TILE_SCENE: PackedScene = preload("res://scenes/tile/Tile.tscn")
+const RADIAL_CAPTURE_SHADER: Shader = preload("res://scenes/tile/radial_capture.gdshader")
 
 const APPEAR_WAVE_DELAY := 0.07 ## Opóźnienie fali wejścia na jednostkę odległości od środka.
-const CAPTURE_FILL_DURATION := 3.0 ## Czas "zalewania" jednego pola nowym kolorem.
-const CAPTURE_MAX_TOTAL := 6.0 ## Głębokie terytoria: pierścienie skracają się, by całość trwała maks. tyle.
+const CAPTURE_DURATION := 3.0 ## Czas radialnego malowania całej przejmowanej strefy.
+const CAPTURE_EDGE_WIDTH := 36.0 ## Jasne czoło fali (piksele) – patrz radial_capture.gdshader.
 const ROLL_HOPS := 18 ## Liczba przeskoków podświetlenia w ruletce.
 const ROLL_LANDING_PAUSE := 0.3 ## Ostatni przeskok tyle przed ogłoszeniem wyniku (pauza przed "beep").
 const MAX_TILE_ASPECT := 1.6 ## Maks. stosunek szerokość/wysokość kafelka.
@@ -41,6 +45,7 @@ const NEIGHBOR_BITS := {
 ## Fullscreen tylko, gdy wykryto więcej niż jeden monitor (wygodne przy developmencie).
 @export var fullscreen_on_multi_monitor := true
 
+## Indeks komórki -> kafelek (null dla pustej komórki).
 var _tiles: Array[Tile] = []
 ## Właściciele pól tak, jak są aktualnie NARYSOWANI (nadąża za animacją przejęcia).
 var _displayed_owners := PackedInt32Array()
@@ -53,6 +58,13 @@ var _roll_tween: Tween
 ## Kolejni gracze, po których skacze podświetlenie ruletki (ostatni = wylosowany).
 var _roll_sequence: Array[int] = []
 var _roll_step := -1
+var _capture_tween: Tween
+## Pola z aktywną nakładką przejęcia: wszystkie pola zwycięzcy + przejmowane
+## (dokańczane w [method _finish_radial_capture]).
+var _capturing_tiles: Array[int] = []
+## Pola, które po fali przejdą do zwycięzcy, i sam zwycięzca (-1 = brak fali).
+var _capture_new_tiles := PackedInt32Array()
+var _capture_winner := -1
 
 @onready var _layout: VBoxContainer = %Layout
 @onready var _top_bar: HBoxContainer = %TopBar
@@ -60,6 +72,8 @@ var _roll_step := -1
 @onready var _banner_label: Label = %BannerLabel
 @onready var _grid: GridContainer = %Grid
 @onready var _admin_window: Window = $AdminWindow
+## Konfetti na koniec gry – rysowane nad podłogą i ekranem pojedynku.
+@onready var _confetti: Confetti = _create_confetti()
 
 
 func _ready() -> void:
@@ -107,6 +121,7 @@ func _connect_game_signals() -> void:
 
 func _on_floor_generated(columns: int, rows: int) -> void:
 	_stop_roll()
+	_confetti.stop()
 	_clear_floor()
 	_floor_generation += 1
 	_grid.columns = columns
@@ -116,14 +131,23 @@ func _on_floor_generated(columns: int, rows: int) -> void:
 	AudioManager.play_music(AudioManager.MUSIC_MAIN)
 
 	var gap := float(_grid.get_theme_constant("h_separation"))
+	var player_count := 0
 	for i in columns * rows:
+		var owner_id := _displayed_owners[i]
+		if owner_id == GameManager.EMPTY_CELL:
+			# Niewidoczny wypełniacz: trzyma miejsce, by ostatni rząd był wyśrodkowany.
+			var filler := Control.new()
+			filler.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_grid.add_child(filler)
+			_tiles.append(null)
+			continue
 		var tile: Tile = TILE_SCENE.instantiate()
 		_grid.add_child(tile)
 		tile.setup(i, gap)
-		var owner_id := _displayed_owners[i]
 		tile.set_territory(GameManager.get_player_name(owner_id),
 				GameManager.get_player_category(owner_id), GameManager.get_player_color(owner_id))
 		_tiles.append(tile)
+		player_count += 1
 
 	_fit_tiles()
 	_refresh_territories()
@@ -131,10 +155,11 @@ func _on_floor_generated(columns: int, rows: int) -> void:
 	# Fala wejścia rozchodząca się od środka siatki.
 	var center := Vector2(columns - 1, rows - 1) * 0.5
 	for tile in _tiles:
-		var cell := Vector2(GameManager.index_to_cell(tile.tile_index))
-		tile.play_appear(cell.distance_to(center) * APPEAR_WAVE_DELAY)
+		if tile:
+			var cell := Vector2(GameManager.index_to_cell(tile.tile_index))
+			tile.play_appear(cell.distance_to(center) * APPEAR_WAVE_DELAY)
 
-	_show_banner("Podłoga gotowa! %d graczy" % (columns * rows), ACCENT_COLOR)
+	_show_banner("Podłoga gotowa! %d graczy" % player_count, ACCENT_COLOR)
 
 
 ## Ruletka: podświetlenie skacze po kandydatach coraz wolniej (tween z ease out),
@@ -210,24 +235,39 @@ func _on_duel_started(attacker_id: int, defender_id: int) -> void:
 
 func _on_territory_captured(winner_id: int, loser_id: int, tile_indices: PackedInt32Array) -> void:
 	var winner_name := GameManager.get_player_name(winner_id)
-	var winner_category := GameManager.get_player_category(winner_id)
-	var winner_color := GameManager.get_player_color(winner_id)
+	_finish_radial_capture() # Poprzednie przejęcie (jeśli jeszcze trwa) kończymy od razu.
 
-	# Zalewanie startuje, gdy ekran pojedynku już zniknie. Każdy pierścień = "woosh".
-	var plan := _plan_capture_flow(winner_id, tile_indices)
-	var ring_duration: float = plan["ring_duration"]
-	for ring in plan["ring_count"]:
-		get_tree().create_timer(DuelScreen.FADE_DURATION + ring * ring_duration).timeout.connect(
-				_play_capture_sound.bind(_floor_generation))
-	for tile_index: int in plan["depth"]:
-		var depth: int = plan["depth"][tile_index]
-		var delay := DuelScreen.FADE_DURATION + (depth - 1) * ring_duration
-		_tiles[tile_index].capture(winner_name, winner_category, winner_color,
-				delay, plan["direction"][tile_index], ring_duration)
-		get_tree().create_timer(delay).timeout.connect(
-				_show_tile_owner.bind(_floor_generation, tile_index, winner_id))
+	# Środek fali = środek pola zwycięzcy, z którego "wychodzi" atak.
+	var origin := _find_capture_origin(winner_id, tile_indices)
+	var center := _tiles[origin].get_global_rect().get_center()
+	# Promień końcowy: najdalszy narożnik przejmowanych pól (z mostkami) + czoło fali.
+	var gap := float(_grid.get_theme_constant("h_separation"))
+	var max_radius := 0.0
+	for tile_index in tile_indices:
+		var rect := _tiles[tile_index].get_global_rect().grow(gap)
+		for corner: Vector2 in [rect.position, rect.end,
+				Vector2(rect.position.x, rect.end.y), Vector2(rect.end.x, rect.position.y)]:
+			max_radius = maxf(max_radius, center.distance_to(corner))
+	max_radius += CAPTURE_EDGE_WIDTH
 
-	# Zwycięzca pozostaje aktywny – przejmowane pola dołączają do obrysu w trakcie fali.
+	# JEDEN materiał dla całej strefy – wszystkie pola widzą to samo koło.
+	var radial := ShaderMaterial.new()
+	radial.shader = RADIAL_CAPTURE_SHADER
+	radial.set_shader_parameter("center", center)
+	radial.set_shader_parameter("radius", 0.0)
+	radial.set_shader_parameter("edge_width", CAPTURE_EDGE_WIDTH)
+
+	# Start, gdy ekran pojedynku już zniknie.
+	_capture_tween = create_tween()
+	_capture_tween.tween_interval(DuelScreen.FADE_DURATION)
+	_capture_tween.tween_callback(_begin_radial_capture.bind(winner_id, tile_indices, radial))
+	_capture_tween.tween_method(
+			func(radius: float) -> void: radial.set_shader_parameter("radius", radius),
+			0.0, max_radius, CAPTURE_DURATION) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_capture_tween.tween_callback(_finish_radial_capture)
+
+	# Zwycięzca pozostaje aktywny – obrys obejmie nową strefę od startu fali.
 	_set_highlights({ winner_id: Tile.HighlightStyle.SELECTED })
 	_show_banner("%s przejmuje terytorium gracza %s!" % [
 		winner_name, GameManager.get_player_name(loser_id),
@@ -243,6 +283,27 @@ func _on_game_over(winner_id: int) -> void:
 	_set_highlights({ winner_id: Tile.HighlightStyle.WINNER })
 	AudioManager.play_win_music()
 	_show_banner("ZWYCIĘZCA: %s!" % GameManager.get_player_name(winner_id), SUCCESS_COLOR)
+	# Konfetti, gdy ekran pojedynku już zniknie.
+	get_tree().create_timer(DuelScreen.FADE_DURATION).timeout.connect(
+			_play_confetti.bind(_floor_generation, winner_id))
+
+
+func _create_confetti() -> Confetti:
+	var confetti := Confetti.new()
+	confetti.name = "Confetti"
+	confetti.z_index = 100
+	add_child(confetti)
+	return confetti
+
+
+func _play_confetti(generation: int, winner_id: int) -> void:
+	if generation != _floor_generation:
+		return
+	# Kolor zwycięzcy pojawia się najczęściej, reszta to barwy akcentowe gry.
+	var winner_color := GameManager.get_player_color(winner_id)
+	var colors: Array[Color] = [winner_color, winner_color, winner_color.lightened(0.35),
+			ACCENT_COLOR, SUCCESS_COLOR, DANGER_COLOR, Color("118ab2"), Color.WHITE]
+	_confetti.play(size, colors)
 
 #endregion
 
@@ -250,6 +311,10 @@ func _on_game_over(winner_id: int) -> void:
 #region Siatka i terytoria
 
 func _clear_floor() -> void:
+	_kill_tween(_capture_tween)
+	_capturing_tiles.clear()
+	_capture_new_tiles = PackedInt32Array()
+	_capture_winner = -1
 	for child in _grid.get_children():
 		_grid.remove_child(child) # Natychmiast z layoutu, zwolnienie na końcu klatki.
 		child.queue_free()
@@ -278,71 +343,77 @@ func _fit_tiles() -> void:
 	tile_w = minf(tile_w, tile_h * MAX_TILE_ASPECT)
 	var tile_size := Vector2(maxf(tile_w, 16.0), maxf(tile_h, 16.0))
 
-	for tile in _tiles:
-		tile.custom_minimum_size = tile_size
+	# Także niewidoczne wypełniacze – trzymają kształt siatki.
+	for cell in _grid.get_children():
+		(cell as Control).custom_minimum_size = tile_size
 
 
-## Callback fali przejęcia: pole wizualnie przechodzi do zwycięzcy.
-func _show_tile_owner(generation: int, tile_index: int, owner_id: int) -> void:
-	if generation != _floor_generation or tile_index >= _displayed_owners.size():
-		return # Podłoga została w międzyczasie wygenerowana od nowa.
-	_displayed_owners[tile_index] = owner_id
+## Start fali. Podłoga pod spodem zostaje NIETKNIĘTA (stare kolory, kształty i szczeliny),
+## a nad nią cały przyszły kształt zwycięzcy – jego dotychczasowe pola + przejmowane, już
+## połączone mostkami – jest odsłaniany kołem. Dzięki temu granica zwycięzcy dosłownie
+## rozlewa się razem z falą: szczeliny znikają i narożniki prostują się tam, gdzie dotarła.
+func _begin_radial_capture(winner_id: int, tile_indices: PackedInt32Array, radial: ShaderMaterial) -> void:
+	var winner_name := GameManager.get_player_name(winner_id)
+	var winner_category := GameManager.get_player_category(winner_id)
+	var winner_color := GameManager.get_player_color(winner_id)
+	AudioManager.play_sfx(AudioManager.SFX_WOOSH)
+
+	var merged_owners := _displayed_owners.duplicate()
+	for tile_index in tile_indices:
+		merged_owners[tile_index] = winner_id
+	_capture_winner = winner_id
+	_capture_new_tiles = tile_indices
+
+	for i in merged_owners.size():
+		if merged_owners[i] != winner_id:
+			continue
+		var is_new_tile := i in tile_indices
+		if not is_new_tile:
+			# Zwycięzca gra teraz kategorią atakującego – także na dotychczasowych polach.
+			_tiles[i].set_category(winner_category)
+		_tiles[i].begin_capture(winner_name, winner_category, winner_color, radial,
+				_neighbor_mask_in(merged_owners, i), is_new_tile)
+		_capturing_tiles.append(i)
+	_refresh_territories() # Wycisza obrys zwycięzcy na czas fali.
+
+
+## Koniec fali (lub przerwanie): pola przechodzą do zwycięzcy, nowy kolor i kształt zostają
+## na stałe, a obrys pojawia się już wokół całego, powiększonego terytorium.
+func _finish_radial_capture() -> void:
+	_kill_tween(_capture_tween)
+	if _capture_winner >= 0:
+		for tile_index in _capture_new_tiles:
+			_displayed_owners[tile_index] = _capture_winner
+	for tile_index in _capturing_tiles:
+		_tiles[tile_index].finish_capture()
+	_capturing_tiles.clear()
+	_capture_new_tiles = PackedInt32Array()
+	_capture_winner = -1
 	_refresh_territories()
 
 
-## Kolejność i kierunek zalewania przejmowanych pól (BFS od terytorium zwycięzcy):
-## pierścień 1 = pola stykające się z pierwotnym terytorium zwycięzcy, pierścień 2 = ich
-## sąsiedzi itd. Kierunek = od pola-rodzica do pola przejmowanego.
-## Zwraca [code]{ depth: {indeks: int}, direction: {indeks: Vector2i}, ring_count, ring_duration }[/code].
-func _plan_capture_flow(winner_id: int, tile_indices: PackedInt32Array) -> Dictionary:
-	var captured: Dictionary = {}
+## Pole zwycięzcy, z którego startuje fala: preferujemy pola stykające się z przejmowaną
+## strefą, a spośród nich – najbliższe jej środka.
+func _find_capture_origin(winner_id: int, tile_indices: PackedInt32Array) -> int:
+	var captured_center := Vector2.ZERO
 	for tile_index in tile_indices:
-		captured[tile_index] = true
+		captured_center += Vector2(GameManager.index_to_cell(tile_index))
+	captured_center /= maxi(tile_indices.size(), 1)
 
-	var depth: Dictionary = {}
-	var direction: Dictionary = {}
-	var frontier: Array[int] = []
-	for tile_index in tile_indices:
-		for neighbor in GameManager.get_neighbor_tiles(tile_index):
-			if not captured.has(neighbor) and GameManager.get_tile_owner(neighbor) == winner_id:
-				depth[tile_index] = 1
-				direction[tile_index] = _cell_step(neighbor, tile_index)
-				frontier.append(tile_index)
-				break
-
-	while not frontier.is_empty():
-		var next: Array[int] = []
-		for tile_index in frontier:
-			for neighbor in GameManager.get_neighbor_tiles(tile_index):
-				if captured.has(neighbor) and not depth.has(neighbor):
-					depth[neighbor] = depth[tile_index] + 1
-					direction[neighbor] = _cell_step(tile_index, neighbor)
-					next.append(neighbor)
-		frontier = next
-
-	# Zabezpieczenie: pola nieosiągalne (nie powinno się zdarzyć) zalewają się w 1. pierścieniu.
-	var ring_count := 1
-	for tile_index in tile_indices:
-		if not depth.has(tile_index):
-			depth[tile_index] = 1
-			direction[tile_index] = Vector2i.RIGHT
-		ring_count = maxi(ring_count, depth[tile_index])
-
-	return {
-		"depth": depth,
-		"direction": direction,
-		"ring_count": ring_count,
-		"ring_duration": minf(CAPTURE_FILL_DURATION, CAPTURE_MAX_TOTAL / ring_count),
-	}
-
-
-func _cell_step(from_index: int, to_index: int) -> Vector2i:
-	return GameManager.index_to_cell(to_index) - GameManager.index_to_cell(from_index)
-
-
-func _play_capture_sound(generation: int) -> void:
-	if generation == _floor_generation:
-		AudioManager.play_sfx(AudioManager.SFX_WOOSH)
+	var best := tile_indices[0]
+	var best_score := INF
+	for i in _displayed_owners.size():
+		if _displayed_owners[i] != winner_id:
+			continue
+		var touches := GameManager.get_neighbor_tiles(i).any(
+			func(neighbor: int) -> bool: return neighbor in tile_indices
+		)
+		var score := Vector2(GameManager.index_to_cell(i)).distance_squared_to(captured_center) \
+				+ (0.0 if touches else 1000.0)
+		if score < best_score:
+			best = i
+			best_score = score
+	return best
 
 
 func _set_highlights(highlights: Dictionary) -> void:
@@ -357,19 +428,27 @@ func _refresh_territories() -> void:
 	var label_anchors := _find_label_anchors()
 	for i in _tiles.size():
 		var tile := _tiles[i]
-		tile.set_neighbors(_neighbor_mask(i))
-		tile.set_highlight(_highlights.get(_displayed_owners[i], Tile.HighlightStyle.NONE))
+		if tile == null:
+			continue # Pusta komórka.
+		tile.set_neighbors(_neighbor_mask_in(_displayed_owners, i))
+		# W trakcie fali obrys zwycięzcy jest wyciszony (stary kształt przecinałby nowy).
+		var owner_id := _displayed_owners[i]
+		var style: Tile.HighlightStyle = Tile.HighlightStyle.NONE
+		if owner_id != _capture_winner:
+			style = _highlights.get(owner_id, Tile.HighlightStyle.NONE)
+		tile.set_highlight(style)
 		tile.set_labels_visible(label_anchors.has(i))
 
 
-func _neighbor_mask(tile_index: int) -> int:
-	var owner_id := _displayed_owners[tile_index]
+## Maska sąsiadów pola [param tile_index] względem podanego układu właścicieli
+## (aktualnego albo "po przejęciu").
+func _neighbor_mask_in(owners: PackedInt32Array, tile_index: int) -> int:
+	var owner_id := owners[tile_index]
 	var cell := GameManager.index_to_cell(tile_index)
 	var mask := 0
 	for offset: Vector2i in NEIGHBOR_BITS:
 		var neighbor := cell + offset
-		if GameManager.is_cell_inside(neighbor) \
-				and _displayed_owners[GameManager.cell_to_index(neighbor)] == owner_id:
+		if GameManager.is_cell_inside(neighbor) and owners[GameManager.cell_to_index(neighbor)] == owner_id:
 			mask |= NEIGHBOR_BITS[offset]
 	return mask
 
@@ -380,6 +459,8 @@ func _find_label_anchors() -> Dictionary:
 	var tiles_by_owner: Dictionary = {}
 	for i in _displayed_owners.size():
 		var owner_id := _displayed_owners[i]
+		if owner_id == GameManager.EMPTY_CELL:
+			continue
 		if not tiles_by_owner.has(owner_id):
 			tiles_by_owner[owner_id] = []
 		tiles_by_owner[owner_id].append(i)

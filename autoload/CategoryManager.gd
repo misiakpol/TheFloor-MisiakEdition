@@ -82,7 +82,8 @@ func reload() -> void:
 	for folder_name: String in folder_names:
 		if folder_name.begins_with("."):
 			continue
-		categories.append(_scan_category(root.path_join(folder_name), folder_name.strip_edges()))
+		# Nazwa wyświetlana w formacie "proper" (Dworce Kolejowe); ścieżka zostaje oryginalna.
+		categories.append(_scan_category(root.path_join(folder_name), TextUtils.to_proper(folder_name)))
 
 	if categories.is_empty():
 		_fail("Folder %s nie zawiera żadnych podfolderów z kategoriami." % root)

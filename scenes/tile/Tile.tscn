@@ -9,19 +9,19 @@ anchors_preset = 0
 mouse_filter = 2
 script = ExtResource("1_tile")
 
-[node name="FillMask" type="Control" parent="."]
+[node name="CaptureLayer" type="Control" parent="."]
 visible = false
-clip_contents = true
+z_index = 1
 layout_mode = 1
-anchors_preset = 0
-mouse_filter = 2
-
-[node name="FillShape" type="Control" parent="FillMask"]
-layout_mode = 1
-anchors_preset = 0
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 mouse_filter = 2
 
 [node name="Content" type="MarginContainer" parent="."]
+z_index = 2
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -36,6 +36,7 @@ theme_override_constants/margin_bottom = 6
 
 [node name="VBox" type="VBoxContainer" parent="Content"]
 layout_mode = 2
+size_flags_vertical = 3
 mouse_filter = 2
 theme_override_constants/separation = 0
 alignment = 1
@@ -50,8 +51,7 @@ theme_override_font_sizes/font_size = 16
 text = "Kategoria"
 horizontal_alignment = 1
 vertical_alignment = 1
-clip_text = true
-text_overrun_behavior = 3
+autowrap_mode = 3
 
 [node name="OwnerLabel" type="Label" parent="Content/VBox"]
 unique_name_in_owner = true
@@ -63,11 +63,11 @@ theme_override_font_sizes/font_size = 12
 text = "Gracz"
 horizontal_alignment = 1
 vertical_alignment = 1
-clip_text = true
-text_overrun_behavior = 3
+autowrap_mode = 3
 
 [node name="Flash" type="Control" parent="."]
 modulate = Color(1, 1, 1, 0)
+z_index = 2
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -78,6 +78,7 @@ mouse_filter = 2
 
 [node name="HighlightLayer" type="Control" parent="."]
 modulate = Color(1, 1, 1, 0)
+z_index = 2
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0

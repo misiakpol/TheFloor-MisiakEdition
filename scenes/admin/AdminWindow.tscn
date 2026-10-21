@@ -338,45 +338,34 @@ theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
 theme_override_font_sizes/font_size = 13
 text = "PODŁOGA"
 
-[node name="SizeRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn"]
+[node name="PlayerCountRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="ColumnsLabel" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/SizeRow"]
+[node name="PlayerCountTitle" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/PlayerCountRow"]
 layout_mode = 2
-text = "Kolumny"
+text = "Liczba graczy"
 
-[node name="ColumnsSpin" type="SpinBox" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/SizeRow"]
+[node name="PlayerCountSpin" type="SpinBox" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/PlayerCountRow"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+tooltip_text = "Nie mniej niż graczy na liście; brakujących uzupełni gra (Gracz N)."
 min_value = 2.0
-max_value = 12.0
-value = 4.0
+max_value = 100.0
+value = 2.0
 
-[node name="RowsLabel" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/SizeRow"]
-layout_mode = 2
-text = "Wiersze"
-
-[node name="RowsSpin" type="SpinBox" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/SizeRow"]
+[node name="GridPreviewLabel" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/PlayerCountRow"]
 unique_name_in_owner = true
 layout_mode = 2
-size_flags_horizontal = 3
-min_value = 2.0
-max_value = 12.0
-value = 3.0
-
-[node name="FitGridButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/SizeRow"]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Dobiera wymiary do liczby graczy na liście."
-text = "Dopasuj"
+theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
+text = "siatka 2 x 1"
 
 [node name="FloorHint" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
 theme_override_font_sizes/font_size = 12
-text = "Pola ponad liczbę graczy z listy dostają automatycznych graczy (Gracz N) z losową kategorią."
+text = "Liczba graczy rośnie razem z listą. Nadwyżka ponad listę to automatyczni gracze (Gracz N) z losową kategorią. Niepełny ostatni rząd jest wyśrodkowany."
 autowrap_mode = 3
 
 [node name="ShuffleCheck" type="CheckBox" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn"]
