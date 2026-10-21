@@ -1,0 +1,292 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scenes/duel/DuelScreen.gd" id="1_duel"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_side"]
+content_margin_left = 24.0
+content_margin_top = 24.0
+content_margin_right = 24.0
+content_margin_bottom = 24.0
+bg_color = Color(0.12, 0.12, 0.2, 0.92)
+border_width_left = 6
+border_width_top = 6
+border_width_right = 6
+border_width_bottom = 6
+border_color = Color(1, 0.82, 0.4, 1)
+corner_radius_top_left = 28
+corner_radius_top_right = 28
+corner_radius_bottom_right = 28
+corner_radius_bottom_left = 28
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_image_frame"]
+content_margin_left = 16.0
+content_margin_top = 16.0
+content_margin_right = 16.0
+content_margin_bottom = 16.0
+bg_color = Color(0, 0, 0, 0.35)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(1, 1, 1, 0.12)
+corner_radius_top_left = 28
+corner_radius_top_right = 28
+corner_radius_bottom_right = 28
+corner_radius_bottom_left = 28
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_feedback"]
+content_margin_left = 28.0
+content_margin_top = 10.0
+content_margin_right = 28.0
+content_margin_bottom = 10.0
+bg_color = Color(0, 0, 0, 0.78)
+corner_radius_top_left = 18
+corner_radius_top_right = 18
+corner_radius_bottom_right = 18
+corner_radius_bottom_left = 18
+
+[node name="DuelScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_duel")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.03, 0.03, 0.08, 0.97)
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 48
+theme_override_constants/margin_top = 32
+theme_override_constants/margin_right = 48
+theme_override_constants/margin_bottom = 48
+
+[node name="VBox" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 24
+
+[node name="Header" type="VBoxContainer" parent="Margin/VBox"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="DuelCaption" type="Label" parent="Margin/VBox/Header"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.82, 0.4, 1)
+theme_override_font_sizes/font_size = 30
+text = "POJEDYNEK"
+horizontal_alignment = 1
+
+[node name="CategoryLabel" type="Label" parent="Margin/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.7)
+theme_override_constants/outline_size = 10
+theme_override_font_sizes/font_size = 64
+text = "KATEGORIA"
+horizontal_alignment = 1
+clip_text = true
+text_overrun_behavior = 3
+
+[node name="Body" type="HBoxContainer" parent="Margin/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+theme_override_constants/separation = 36
+
+[node name="LeftPanel" type="PanelContainer" parent="Margin/VBox/Body"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(400, 0)
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBox_side")
+
+[node name="LeftBox" type="VBoxContainer" parent="Margin/VBox/Body/LeftPanel"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="LeftName" type="Label" parent="Margin/VBox/Body/LeftPanel/LeftBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 44
+text = "Gracz 1"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="LeftTime" type="Label" parent="Margin/VBox/Body/LeftPanel/LeftBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.6)
+theme_override_constants/outline_size = 12
+theme_override_font_sizes/font_size = 180
+text = "45"
+horizontal_alignment = 1
+
+[node name="LeftStatus" type="Label" parent="Margin/VBox/Body/LeftPanel/LeftBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.82, 0.4, 1)
+theme_override_font_sizes/font_size = 32
+horizontal_alignment = 1
+
+[node name="ImageFrame" type="PanelContainer" parent="Margin/VBox/Body"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBox_image_frame")
+
+[node name="ImageRect" type="TextureRect" parent="Margin/VBox/Body/ImageFrame"]
+unique_name_in_owner = true
+texture_filter = 4
+layout_mode = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="PlaceholderLabel" type="Label" parent="Margin/VBox/Body/ImageFrame"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 0.75)
+theme_override_font_sizes/font_size = 56
+text = "PRZYGOTUJCIE SIĘ!"
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 3
+
+[node name="FeedbackLabel" type="Label" parent="Margin/VBox/Body/ImageFrame"]
+unique_name_in_owner = true
+modulate = Color(1, 1, 1, 0)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 8
+theme_override_font_sizes/font_size = 46
+theme_override_styles/normal = SubResource("StyleBox_feedback")
+text = "Odpowiedź"
+horizontal_alignment = 1
+
+[node name="CountdownLabel" type="Label" parent="Margin/VBox/Body/ImageFrame"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.82, 0.4, 1)
+theme_override_colors/font_outline_color = Color(0.45, 0.2, 0, 1)
+theme_override_constants/outline_size = 24
+theme_override_font_sizes/font_size = 340
+text = "3"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="PenaltyBox" type="VBoxContainer" parent="Margin/VBox/Body/ImageFrame"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="PenaltyCaption" type="Label" parent="Margin/VBox/Body/ImageFrame/PenaltyBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.28, 0.44, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.85)
+theme_override_constants/outline_size = 10
+theme_override_font_sizes/font_size = 48
+text = "PAS — KARA"
+horizontal_alignment = 1
+
+[node name="PenaltyLabel" type="Label" parent="Margin/VBox/Body/ImageFrame/PenaltyBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.28, 0.44, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.85)
+theme_override_constants/outline_size = 24
+theme_override_font_sizes/font_size = 300
+text = "3"
+horizontal_alignment = 1
+
+[node name="PenaltyAnswerLabel" type="Label" parent="Margin/VBox/Body/ImageFrame/PenaltyBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.9)
+theme_override_constants/outline_size = 14
+theme_override_font_sizes/font_size = 64
+theme_override_styles/normal = SubResource("StyleBox_feedback")
+text = "Odpowiedź"
+horizontal_alignment = 1
+
+[node name="PauseLabel" type="Label" parent="Margin/VBox/Body/ImageFrame"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.82, 0.4, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.85)
+theme_override_constants/outline_size = 16
+theme_override_font_sizes/font_size = 120
+text = "PAUZA"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="RightPanel" type="PanelContainer" parent="Margin/VBox/Body"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(400, 0)
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBox_side")
+
+[node name="RightBox" type="VBoxContainer" parent="Margin/VBox/Body/RightPanel"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="RightName" type="Label" parent="Margin/VBox/Body/RightPanel/RightBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 44
+text = "Gracz 2"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="RightTime" type="Label" parent="Margin/VBox/Body/RightPanel/RightBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.6)
+theme_override_constants/outline_size = 12
+theme_override_font_sizes/font_size = 180
+text = "45"
+horizontal_alignment = 1
+
+[node name="RightStatus" type="Label" parent="Margin/VBox/Body/RightPanel/RightBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.82, 0.4, 1)
+theme_override_font_sizes/font_size = 32
+horizontal_alignment = 1

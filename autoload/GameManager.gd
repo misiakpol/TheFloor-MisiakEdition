@@ -1,0 +1,653 @@
+extends Node
+## GameManager (Autoload)
+##
+## Jedyne źródło prawdy o stanie gry. Przepływ danych jest jednokierunkowy:
+## [br]  AdminWindow --(wywołuje metody)--> GameManager --(emituje sygnały)--> Main / DuelScreen / AdminWindow
+## [br]Okna nic o sobie nie wiedzą – komunikują się wyłącznie przez ten singleton.
+##
+## Model danych:
+## - [member roster]: gracze wpisani ręcznie w konsoli admina (imię + kategoria),
+## - [member players]: gracze bieżącej podłogi (id == indeks), każdy z kolorem i kategorią,
+## - [member tile_owners]: dla każdego pola – id gracza, który je posiada.
+## Wygrany pojedynek przenosi WSZYSTKIE pola przegranego na zwycięzcę, a przegrany odpada.
+##
+## Pojedynek (faza DUEL) też jest liczony tutaj – zegary, talia zdjęć i to, kto odpowiada –
+## dzięki czemu ekran TV (DuelScreen) i konsola admina zawsze pokazują ten sam stan.
+
+signal roster_changed
+signal floor_generated(columns: int, rows: int)
+## Start animacji ruletki: [param candidate_ids] – gracze, po których skacze podświetlenie,
+## [param winner_id] – na kim się zatrzyma. Po [param duration] s przychodzi [signal player_selected].
+signal player_roll_started(candidate_ids: Array, winner_id: int, duration: float)
+signal player_selected(player_id: int)
+signal duel_started(attacker_id: int, defender_id: int)
+## Nowe zdjęcie w pojedynku. [param previous_answer] – odpowiedź do poprzedniego zdjęcia
+## (pusta przy pierwszym), [param action] – [enum DuelAction], który spowodował zmianę.
+signal duel_image_changed(image: Dictionary, previous_answer: String, action: int)
+signal duel_turn_changed(active_side: int)
+## Odliczanie przed startem: 3, 2, 1 (po "1" pojawia się pierwsze zdjęcie).
+signal duel_countdown_changed(value: int)
+## Emitowany co klatkę, gdy zegar chodzi (oraz po każdej sekundzie kary).
+signal duel_time_updated(times: PackedFloat32Array)
+## Zegar aktywnego gracza przekroczył pełną sekundę (tykanie).
+signal duel_clock_ticked(side: int, seconds_left: int)
+## Pas: zaczyna się kara [constant PASS_PENALTY] s, zdjęcie czeka.
+signal duel_penalty_started(side: int)
+## Minęła sekunda kary (zdjęta z zegara gracza). [param penalty_left] = 2, 1, 0.
+signal duel_penalty_ticked(side: int, penalty_left: int)
+signal duel_timeout(loser_side: int)
+## Pojedynek zakończony (rozstrzygnięty lub przerwany) – ekran pojedynku może zniknąć.
+signal duel_ended
+## Po przejęciu zwycięzca pozostaje aktywnym graczem (może walczyć dalej).
+signal territory_captured(winner_id: int, loser_id: int, tile_indices: PackedInt32Array)
+signal selection_cleared
+signal game_over(winner_id: int)
+## Ogólny sygnał "coś się zmieniło" – wygodny do odświeżania UI admina.
+signal state_changed
+signal log_message(text: String)
+
+## ROLLING – trwa animacja ruletki (wynik jest już znany, ale jeszcze nie ogłoszony).
+enum Phase { NO_FLOOR, IDLE, ROLLING, PLAYER_SELECTED, DUEL, GAME_OVER }
+## READY – ekran pojedynku widoczny, czeka na START; COUNTDOWN – odliczanie 3-2-1;
+## RUNNING – zegar aktywnego gracza chodzi; PENALTY – kara za pas (co sekundę -1 s);
+## PAUSED – wstrzymane (dowolny z trzech powyższych); TIMEOUT – komuś skończył się czas.
+enum DuelState { READY, COUNTDOWN, RUNNING, PENALTY, PAUSED, TIMEOUT }
+enum DuelAction { START, CORRECT, PASS }
+
+const MIN_GRID_SIZE := 2
+const MAX_GRID_SIZE := 12
+const NEIGHBOR_OFFSETS := [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]
+const ATTACKER_SIDE := 0 ## Lewa strona ekranu pojedynku.
+const DEFENDER_SIDE := 1 ## Prawa strona ekranu pojedynku.
+const DUEL_TIME := 45.0
+const COUNTDOWN_FROM := 3
+## Kara za pas w pełnych sekundach (zdejmowana po 1 s na sekundę).
+const PASS_PENALTY := 3
+const NO_CATEGORY := "Brak kategorii"
+const ROLL_DURATION := 2.0
+
+var phase: Phase = Phase.NO_FLOOR
+var columns := 0
+var rows := 0
+
+## Gracze przygotowani przed wygenerowaniem podłogi: [code]{ name, category }[/code].
+## Pusta kategoria = losowa.
+var roster: Array[Dictionary] = []
+## Każdy gracz: [code]{ id, name, color, category: String, alive }[/code]
+var players: Array[Dictionary] = []
+## Indeks pola -> id właściciela.
+var tile_owners: PackedInt32Array = PackedInt32Array()
+
+var selected_player_id := -1
+var defender_id := -1
+## Unieważnia opóźnione zakończenie starej ruletki (np. po wygenerowaniu nowej podłogi).
+var _roll_id := 0
+
+var duel_state: DuelState = DuelState.READY
+var duel_active_side := ATTACKER_SIDE
+## Pozostały czas: [ATTACKER_SIDE, DEFENDER_SIDE].
+var duel_times := PackedFloat32Array([DUEL_TIME, DUEL_TIME])
+## Aktualne zdjęcie: [code]{ answer, path }[/code] (puste przed STARTEM).
+var duel_image: Dictionary = {}
+## Aktualna liczba odliczania (3, 2, 1) w stanie COUNTDOWN.
+var duel_countdown := 0
+## Pozostałe sekundy kary w stanie PENALTY.
+var duel_penalty_left := 0
+var _duel_deck: Array[Dictionary] = []
+## Czas, który upłynął w bieżącym kroku odliczania / kary (kroki co 1 s).
+var _duel_step_time := 0.0
+var _state_before_pause: DuelState = DuelState.RUNNING
+
+
+func _process(delta: float) -> void:
+	if phase != Phase.DUEL:
+		return
+	match duel_state:
+		DuelState.COUNTDOWN:
+			_process_countdown(delta)
+		DuelState.RUNNING:
+			_process_clock(delta)
+		DuelState.PENALTY:
+			_process_penalty(delta)
+
+
+#region Gracze (przed wygenerowaniem podłogi)
+
+func add_roster_player(player_name: String, category: String) -> bool:
+	var clean_name := player_name.strip_edges()
+	if not _is_valid_roster_name(clean_name, -1):
+		return false
+	roster.append({ "name": clean_name, "category": category })
+	_log("Dodano gracza: %s (%s)." % [clean_name, _describe_roster_category(category)])
+	roster_changed.emit()
+	return true
+
+
+func update_roster_player(index: int, player_name: String, category: String) -> bool:
+	if index < 0 or index >= roster.size():
+		return false
+	var clean_name := player_name.strip_edges()
+	if not _is_valid_roster_name(clean_name, index):
+		return false
+	roster[index] = { "name": clean_name, "category": category }
+	_log("Zmieniono gracza: %s (%s)." % [clean_name, _describe_roster_category(category)])
+	roster_changed.emit()
+	return true
+
+
+func remove_roster_player(index: int) -> void:
+	if index < 0 or index >= roster.size():
+		return
+	var removed: Dictionary = roster.pop_at(index)
+	_log("Usunięto gracza: %s." % removed["name"])
+	roster_changed.emit()
+
+
+func clear_roster() -> void:
+	if roster.is_empty():
+		return
+	roster.clear()
+	_log("Wyczyszczono listę graczy.")
+	roster_changed.emit()
+
+
+## Proponowany rozmiar siatki dla [param player_count] graczy: jak najmniej pustych
+## (dopełnianych automatycznie) pól i proporcje zbliżone do ekranu TV.
+func suggest_grid_size(player_count: int) -> Vector2i:
+	var best := Vector2i(MAX_GRID_SIZE, MAX_GRID_SIZE)
+	var best_score := INF
+	for c in range(MIN_GRID_SIZE, MAX_GRID_SIZE + 1):
+		var r := clampi(ceili(float(player_count) / c), MIN_GRID_SIZE, MAX_GRID_SIZE)
+		var free_tiles := c * r - player_count
+		if free_tiles < 0:
+			continue
+		var score := free_tiles + absf(float(c) / r - 1.6) * 2.0
+		if score < best_score:
+			best_score = score
+			best = Vector2i(c, r)
+	return best
+
+#endregion
+
+
+#region Akcje podłogi (wywoływane przez panel admina)
+
+## Tworzy podłogę z graczy z [member roster]. Pola ponad liczbę graczy dostają
+## automatycznych graczy ("Gracz N") z losową, jeszcze niezajętą kategorią.
+func generate_floor(new_columns: int, new_rows: int, shuffle_positions := true) -> void:
+	if phase == Phase.DUEL:
+		_log("Najpierw zakończ pojedynek.")
+		return
+
+	var new_cols := clampi(new_columns, MIN_GRID_SIZE, MAX_GRID_SIZE)
+	var new_rws := clampi(new_rows, MIN_GRID_SIZE, MAX_GRID_SIZE)
+	var tile_count := new_cols * new_rws
+	if roster.size() > tile_count:
+		_log("Za mało pól (%d) dla %d graczy – powiększ podłogę." % [tile_count, roster.size()])
+		return
+
+	columns = new_cols
+	rows = new_rws
+	players.clear()
+
+	var used_categories: Array[String] = []
+	for entry in roster:
+		if CategoryManager.has_category(entry["category"]):
+			used_categories.append(entry["category"])
+	var taken_names := roster.map(func(entry: Dictionary) -> String: return str(entry["name"]).to_lower())
+
+	for i in tile_count:
+		var entry: Dictionary = roster[i] if i < roster.size() else {}
+		var player_name: String = entry.get("name", "")
+		if player_name.is_empty():
+			player_name = _make_placeholder_name(taken_names)
+
+		var category: String = entry.get("category", "")
+		if not CategoryManager.has_category(category):
+			if not category.is_empty():
+				_log("Kategoria \"%s\" nie istnieje – %s dostaje losową." % [category, player_name])
+			category = _pick_free_category(used_categories)
+			used_categories.append(category)
+
+		players.append({
+			"id": i,
+			"name": player_name,
+			"color": _make_player_color(i),
+			"category": category,
+			"alive": true,
+		})
+
+	var positions := range(tile_count)
+	if shuffle_positions:
+		positions.shuffle()
+	tile_owners.resize(tile_count)
+	for player_id in tile_count:
+		tile_owners[positions[player_id]] = player_id
+
+	selected_player_id = -1
+	defender_id = -1
+	_roll_id += 1
+	_log("Wygenerowano podłogę %d x %d: %d graczy z listy + %d automatycznych." % [
+		columns, rows, roster.size(), tile_count - roster.size(),
+	])
+	for player in players:
+		if CategoryManager.get_questions(player["category"]).is_empty():
+			_log("Uwaga: kategoria \"%s\" (%s) nie ma zdjęć ani utworów – pojedynek o nią będzie niemożliwy." % [
+				player["category"], player["name"],
+			])
+
+	floor_generated.emit(columns, rows)
+	_set_phase(Phase.IDLE)
+
+
+func select_random_player() -> void:
+	if phase not in [Phase.IDLE, Phase.PLAYER_SELECTED]:
+		_log("Nie można teraz losować gracza.")
+		return
+
+	var candidates := get_alive_player_ids().filter(
+		func(id: int) -> bool: return not get_neighbor_player_ids(id).is_empty()
+	)
+	if candidates.is_empty():
+		_log("Brak graczy, którzy mogą walczyć.")
+		return
+
+	# Wynik znany od razu; ekran TV pokazuje go po animacji ruletki.
+	var winner_id: int = candidates.pick_random()
+	selected_player_id = -1
+	defender_id = -1
+	_roll_id += 1
+	_set_phase(Phase.ROLLING)
+	player_roll_started.emit(candidates, winner_id, ROLL_DURATION)
+	get_tree().create_timer(ROLL_DURATION).timeout.connect(_finish_roll.bind(_roll_id, winner_id))
+
+
+func _finish_roll(roll_id: int, winner_id: int) -> void:
+	if roll_id != _roll_id or phase != Phase.ROLLING:
+		return
+	selected_player_id = winner_id
+	_log("Wylosowano: %s" % describe_player(selected_player_id))
+	player_selected.emit(selected_player_id)
+	_set_phase(Phase.PLAYER_SELECTED)
+
+
+func cancel_selection() -> void:
+	if phase not in [Phase.PLAYER_SELECTED, Phase.DUEL]:
+		return
+	if phase == Phase.DUEL:
+		_end_duel()
+	selected_player_id = -1
+	defender_id = -1
+	_log("Anulowano wybór.")
+	selection_cleared.emit()
+	_set_phase(Phase.IDLE)
+
+#endregion
+
+
+#region Pojedynek
+
+## Otwiera ekran pojedynku. Kategoria = kategoria obrońcy (jak w teleturnieju).
+## Zegar rusza dopiero po [method begin_duel].
+func start_duel(target_player_id: int) -> void:
+	if phase != Phase.PLAYER_SELECTED:
+		_log("Najpierw wylosuj gracza.")
+		return
+	if target_player_id not in get_neighbor_player_ids(selected_player_id):
+		_log("%s nie sąsiaduje z aktywnym graczem." % get_player_name(target_player_id))
+		return
+
+	var category := get_player_category(target_player_id)
+	var deck := CategoryManager.get_questions(category)
+	if deck.is_empty():
+		_log("Kategoria \"%s\" nie ma zdjęć ani utworów – wybierz innego przeciwnika." % category)
+		return
+
+	defender_id = target_player_id
+	deck.shuffle()
+	_duel_deck = deck
+	CategoryManager.preload_file(_duel_deck.back()["path"])
+	duel_image = {}
+	duel_times = PackedFloat32Array([DUEL_TIME, DUEL_TIME])
+	duel_active_side = ATTACKER_SIDE
+	duel_state = DuelState.READY
+
+	_log("POJEDYNEK: %s vs %s | kategoria: %s (%s)" % [
+		get_player_name(selected_player_id), get_player_name(defender_id), category,
+		CategoryManager.describe_question_count(category),
+	])
+	duel_started.emit(selected_player_id, defender_id)
+	_set_phase(Phase.DUEL)
+
+
+## START: odliczanie 3-2-1, po nim pierwsze zdjęcie i zegar zaczynającego gracza.
+func begin_duel() -> void:
+	if phase != Phase.DUEL or duel_state != DuelState.READY:
+		return
+	duel_state = DuelState.COUNTDOWN
+	duel_countdown = COUNTDOWN_FROM
+	_duel_step_time = 0.0
+	duel_countdown_changed.emit(duel_countdown)
+	state_changed.emit()
+
+
+## Poprawna odpowiedź: zegar przechodzi na przeciwnika, pojawia się kolejne zdjęcie.
+func duel_correct() -> void:
+	if phase != Phase.DUEL or duel_state != DuelState.RUNNING:
+		return
+	duel_active_side = 1 - duel_active_side
+	_show_next_image(DuelAction.CORRECT)
+	duel_turn_changed.emit(duel_active_side)
+
+
+## Pas: zdjęcie zostaje (przyciemnione), a przez [constant PASS_PENALTY] s co sekundę
+## z zegara gracza schodzi 1 s. Po karze ten sam gracz dostaje nowe zdjęcie.
+func duel_pass() -> void:
+	if phase != Phase.DUEL or duel_state != DuelState.RUNNING:
+		return
+	duel_state = DuelState.PENALTY
+	duel_penalty_left = PASS_PENALTY
+	_duel_step_time = 0.0
+	duel_penalty_started.emit(duel_active_side)
+	state_changed.emit()
+
+
+## Wstrzymuje / wznawia zegar, odliczanie startowe albo karę – co akurat trwa.
+func toggle_duel_pause() -> void:
+	if phase != Phase.DUEL:
+		return
+	if duel_state == DuelState.PAUSED:
+		duel_state = _state_before_pause
+		_log("Wznowiono.")
+	elif duel_state in [DuelState.COUNTDOWN, DuelState.RUNNING, DuelState.PENALTY]:
+		_state_before_pause = duel_state
+		duel_state = DuelState.PAUSED
+		_log("Pauza.")
+	else:
+		return
+	state_changed.emit()
+
+
+## Zatwierdza wynik po upływie czasu: wygrywa gracz, któremu czas NIE minął.
+func finish_duel() -> void:
+	if phase != Phase.DUEL or duel_state != DuelState.TIMEOUT:
+		return
+	resolve_duel(duel_active_side == DEFENDER_SIDE)
+
+
+## Ręczne rozstrzygnięcie. [param attacker_wins] = true -> wygrywa wylosowany gracz.
+func resolve_duel(attacker_wins: bool) -> void:
+	if phase != Phase.DUEL:
+		return
+
+	var winner_id := selected_player_id if attacker_wins else defender_id
+	var loser_id := defender_id if attacker_wins else selected_player_id
+	var captured := get_tiles_of(loser_id)
+	_end_duel()
+
+	for tile_index in captured:
+		tile_owners[tile_index] = winner_id
+	players[loser_id]["alive"] = false
+
+	selected_player_id = winner_id
+	defender_id = -1
+	_log("%s przejmuje terytorium gracza %s (+%d pól)." % [
+		get_player_name(winner_id), get_player_name(loser_id), captured.size(),
+	])
+	territory_captured.emit(winner_id, loser_id, captured)
+
+	if get_alive_player_ids().size() <= 1:
+		_log("KONIEC GRY! Zwycięzca: %s" % get_player_name(winner_id))
+		game_over.emit(winner_id)
+		_set_phase(Phase.GAME_OVER)
+	else:
+		_set_phase(Phase.PLAYER_SELECTED)
+
+
+func _process_countdown(delta: float) -> void:
+	if not _advance_step(delta):
+		return
+	duel_countdown -= 1
+	if duel_countdown > 0:
+		duel_countdown_changed.emit(duel_countdown)
+		return
+	duel_state = DuelState.RUNNING
+	_show_next_image(DuelAction.START)
+	duel_turn_changed.emit(duel_active_side)
+	state_changed.emit()
+
+
+func _process_clock(delta: float) -> void:
+	var side := duel_active_side
+	var before := duel_times[side]
+	duel_times[side] = maxf(before - delta, 0.0)
+	duel_time_updated.emit(duel_times)
+	if duel_times[side] <= 0.0:
+		_on_duel_time_out()
+	elif ceili(duel_times[side]) < ceili(before):
+		# Wyświetlana liczba sekund właśnie się zmieniła.
+		duel_clock_ticked.emit(side, ceili(duel_times[side]))
+
+
+func _process_penalty(delta: float) -> void:
+	if not _advance_step(delta):
+		return
+	var side := duel_active_side
+	duel_times[side] = maxf(duel_times[side] - 1.0, 0.0)
+	duel_penalty_left -= 1
+	duel_time_updated.emit(duel_times)
+	duel_penalty_ticked.emit(side, duel_penalty_left)
+	if duel_times[side] <= 0.0:
+		_on_duel_time_out()
+	elif duel_penalty_left <= 0:
+		duel_state = DuelState.RUNNING
+		_show_next_image(DuelAction.PASS)
+		state_changed.emit()
+
+
+## Zwraca true, gdy minęła kolejna pełna sekunda kroku (odliczanie / kara).
+func _advance_step(delta: float) -> bool:
+	_duel_step_time += delta
+	if _duel_step_time < 1.0:
+		return false
+	_duel_step_time -= 1.0
+	return true
+
+
+func _show_next_image(action: DuelAction) -> void:
+	var previous_answer: String = duel_image.get("answer", "")
+	if _duel_deck.is_empty():
+		_duel_deck = CategoryManager.get_questions(get_duel_category_name())
+		_duel_deck.shuffle()
+		# Nie pokazuj tego samego zdjęcia dwa razy z rzędu po przetasowaniu.
+		if _duel_deck.size() > 1 and _duel_deck.back()["path"] == duel_image.get("path", ""):
+			_duel_deck.push_front(_duel_deck.pop_back())
+		_log("Pokazano już wszystkie zdjęcia z kategorii – tasuję od nowa.")
+
+	duel_image = _duel_deck.pop_back()
+	if not _duel_deck.is_empty():
+		CategoryManager.preload_file(_duel_deck.back()["path"])
+	duel_image_changed.emit(duel_image, previous_answer, action)
+
+
+func _on_duel_time_out() -> void:
+	duel_state = DuelState.TIMEOUT
+	var loser_side := duel_active_side
+	_log("Koniec czasu: %s! Wygrywa %s." % [
+		get_player_name(get_duel_player_id(loser_side)),
+		get_player_name(get_duel_player_id(1 - loser_side)),
+	])
+	duel_timeout.emit(loser_side)
+	state_changed.emit()
+
+
+func _end_duel() -> void:
+	duel_state = DuelState.READY
+	duel_countdown = 0
+	duel_penalty_left = 0
+	duel_image = {}
+	_duel_deck.clear()
+	CategoryManager.clear_cache()
+	duel_ended.emit()
+
+#endregion
+
+
+#region Zapytania (read-only)
+
+func get_player(player_id: int) -> Dictionary:
+	if player_id < 0 or player_id >= players.size():
+		return {}
+	return players[player_id]
+
+
+func get_player_name(player_id: int) -> String:
+	return get_player(player_id).get("name", "?")
+
+
+func get_player_color(player_id: int) -> Color:
+	return get_player(player_id).get("color", Color.GRAY)
+
+
+func get_player_category(player_id: int) -> String:
+	return get_player(player_id).get("category", "-")
+
+
+func describe_player(player_id: int) -> String:
+	var player := get_player(player_id)
+	if player.is_empty():
+		return "-"
+	return "%s (%s, pól: %d)" % [player["name"], player["category"], get_tiles_of(player_id).size()]
+
+
+## Kategoria pojedynku = kategoria obrońcy (jak w teleturnieju).
+func get_duel_category_name() -> String:
+	return get_player_category(defender_id) if defender_id >= 0 else "-"
+
+
+## Czy pojedynek toczy się w kategorii muzycznej (pytania = utwory .ogg)?
+func is_duel_music() -> bool:
+	return CategoryManager.is_music_category(get_duel_category_name())
+
+
+func get_duel_player_id(side: int) -> int:
+	return selected_player_id if side == ATTACKER_SIDE else defender_id
+
+
+## Zwycięzca po upływie czasu (-1, jeśli czas jeszcze nikomu nie minął).
+func get_duel_winner_id() -> int:
+	if phase != Phase.DUEL or duel_state != DuelState.TIMEOUT:
+		return -1
+	return get_duel_player_id(1 - duel_active_side)
+
+
+func get_tile_owner(tile_index: int) -> int:
+	return tile_owners[tile_index]
+
+
+func get_alive_player_ids() -> Array[int]:
+	var result: Array[int] = []
+	for player in players:
+		if player["alive"]:
+			result.append(player["id"])
+	return result
+
+
+func get_tiles_of(player_id: int) -> PackedInt32Array:
+	var result := PackedInt32Array()
+	for i in tile_owners.size():
+		if tile_owners[i] == player_id:
+			result.append(i)
+	return result
+
+
+## Gracze, których terytorium styka się bokiem z terytorium [param player_id].
+func get_neighbor_player_ids(player_id: int) -> Array[int]:
+	var result: Array[int] = []
+	for tile_index in get_tiles_of(player_id):
+		for neighbor_index in get_neighbor_tiles(tile_index):
+			var owner_id := tile_owners[neighbor_index]
+			if owner_id != player_id and owner_id not in result:
+				result.append(owner_id)
+	result.sort()
+	return result
+
+
+func get_neighbor_tiles(tile_index: int) -> Array[int]:
+	var result: Array[int] = []
+	var cell := index_to_cell(tile_index)
+	for offset: Vector2i in NEIGHBOR_OFFSETS:
+		var neighbor := cell + offset
+		if is_cell_inside(neighbor):
+			result.append(cell_to_index(neighbor))
+	return result
+
+
+func is_cell_inside(cell: Vector2i) -> bool:
+	return cell.x >= 0 and cell.x < columns and cell.y >= 0 and cell.y < rows
+
+
+@warning_ignore("integer_division")
+func index_to_cell(tile_index: int) -> Vector2i:
+	return Vector2i(tile_index % columns, tile_index / columns)
+
+
+func cell_to_index(cell: Vector2i) -> int:
+	return cell.y * columns + cell.x
+
+#endregion
+
+
+func _set_phase(new_phase: Phase) -> void:
+	phase = new_phase
+	state_changed.emit()
+
+
+func _log(text: String) -> void:
+	print("[GameManager] " + text)
+	log_message.emit(text)
+
+
+func _is_valid_roster_name(player_name: String, ignored_index: int) -> bool:
+	if player_name.is_empty():
+		_log("Podaj imię gracza.")
+		return false
+	for i in roster.size():
+		if i != ignored_index and str(roster[i]["name"]).to_lower() == player_name.to_lower():
+			_log("Gracz \"%s\" już jest na liście." % player_name)
+			return false
+	return true
+
+
+func _describe_roster_category(category: String) -> String:
+	return category if not category.is_empty() else "losowa kategoria"
+
+
+func _make_placeholder_name(taken_names: Array) -> String:
+	var number := 1
+	while ("gracz %d" % number) in taken_names:
+		number += 1
+	taken_names.append("gracz %d" % number)
+	return "Gracz %d" % number
+
+
+## Losowa kategoria ze zdjęciami, w miarę możliwości jeszcze nieużyta przez innego gracza.
+func _pick_free_category(used_categories: Array[String]) -> String:
+	var all_names: Array = CategoryManager.get_category_names()
+	var playable := all_names.filter(
+		func(category: String) -> bool: return not CategoryManager.get_questions(category).is_empty()
+	)
+	if playable.is_empty():
+		playable = all_names
+	if playable.is_empty():
+		return NO_CATEGORY
+
+	var unused := playable.filter(func(category: String) -> bool: return category not in used_categories)
+	return (unused if not unused.is_empty() else playable).pick_random()
+
+
+## Złoty podział na kole barw = kolejne kolory są od siebie maksymalnie odległe.
+func _make_player_color(index: int) -> Color:
+	var hue := fposmod(0.07 + index * 0.618034, 1.0)
+	var value := 0.78 if index % 2 == 0 else 0.62
+	return Color.from_hsv(hue, 0.62, value)
