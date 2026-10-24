@@ -51,6 +51,8 @@ signal duel_timeout(loser_side: int)
 signal duel_answered(player_id: int, correct: bool, seconds: float, answer: String)
 ## Zmieniła się lista kategorii finałowych zużytych w tej sesji.
 signal used_final_categories_changed
+## Zmieniła się lista kategorii zagranych w tej sesji ([member played_categories]).
+signal played_categories_changed
 ## Pojedynek zakończony (rozstrzygnięty lub przerwany) – ekran pojedynku może zniknąć.
 signal duel_ended
 ## Finał: runda [param round_number] rozstrzygnięta (za chwilę przyjdzie duel_started kolejnej
@@ -137,6 +139,9 @@ var final_score := PackedInt32Array([0, 0])
 var final_category_override := ""
 ## Kategorie rundy rozstrzygającej zagrane w TEJ sesji (klucze) – nie są losowane ponownie.
 var used_final_categories: Array[String] = []
+## Kategorie (klucze), w których w TEJ sesji faktycznie grano – START pojedynku/rundy
+## (gracze widzieli ich zawartość). Losowanie kategorii dla graczy omija je w pierwszej kolejności.
+var played_categories: Array[String] = []
 ## Czas, który upłynął w bieżącym kroku odliczania / kary (kroki co 1 s).
 var _duel_step_time := 0.0
 ## Czas zegara (RUNNING), jaki upłynął na bieżące pytanie.
@@ -160,7 +165,7 @@ func _process(delta: float) -> void:
 
 func add_roster_player(player_name: String, category: String) -> bool:
 	var clean_name := TextUtils.to_proper(player_name) # "jan kowalski" -> "Jan Kowalski"
-	if not _is_valid_roster_name(clean_name, -1):
+	if not _is_valid_roster_name(clean_name, -1) or not _is_valid_roster_category(category, -1):
 		return false
 	roster.append({ "name": clean_name, "category": category })
 	_log("Dodano gracza: %s (%s)." % [clean_name, _describe_roster_category(category)])
@@ -172,7 +177,7 @@ func update_roster_player(index: int, player_name: String, category: String) -> 
 	if index < 0 or index >= roster.size():
 		return false
 	var clean_name := TextUtils.to_proper(player_name) # "jan kowalski" -> "Jan Kowalski"
-	if not _is_valid_roster_name(clean_name, index):
+	if not _is_valid_roster_name(clean_name, index) or not _is_valid_roster_category(category, index):
 		return false
 	roster[index] = { "name": clean_name, "category": category }
 	_log("Zmieniono gracza: %s (%s)." % [clean_name, _describe_roster_category(category)])
@@ -239,10 +244,19 @@ func generate_floor(player_count: int, shuffle_positions := true) -> void:
 	rows = grid.y
 	players.clear()
 
+	# Na jednej podłodze każda nazwa WYŚWIETLANA musi być unikalna ("Marvel [Aktorzy]"
+	# i "Marvel [Postacie]" to na kafelkach dwa razy "Marvel"). Pierwszy gracz z listy
+	# zachowuje swoją kategorię, kolejny kolidujący dostaje losową.
 	var used_categories: Array[String] = []
-	for entry in roster:
-		if CategoryManager.has_category(entry["category"]):
-			used_categories.append(entry["category"])
+	var colliding_roster: Array[int] = []
+	for i in roster.size():
+		var roster_category: String = roster[i]["category"]
+		if not CategoryManager.has_category(roster_category):
+			continue
+		if _is_display_name_taken(roster_category, used_categories):
+			colliding_roster.append(i)
+		else:
+			used_categories.append(roster_category)
 	var taken_names := roster.map(func(entry: Dictionary) -> String: return str(entry["name"]).to_lower())
 
 	for i in tile_count:
@@ -252,6 +266,11 @@ func generate_floor(player_count: int, shuffle_positions := true) -> void:
 			player_name = _make_placeholder_name(taken_names)
 
 		var category: String = entry.get("category", "")
+		if i in colliding_roster:
+			_log("Kategoria \"%s\" wyglądałaby na podłodze tak samo jak inna (\"%s\") – %s dostaje losową." % [
+				category, CategoryManager.get_display_name(category), player_name,
+			])
+			category = ""
 		if not CategoryManager.has_category(category):
 			if not category.is_empty():
 				_log("Kategoria \"%s\" nie istnieje – %s dostaje losową." % [category, player_name])
@@ -422,7 +441,7 @@ func _start_round(category: String) -> void:
 	_log("%s: %s vs %s | kategoria: %s (%s)" % [
 		get_final_round_title() if is_final else "POJEDYNEK",
 		get_player_name(selected_player_id), get_player_name(defender_id),
-		get_duel_category_name(), CategoryManager.describe_question_count(category),
+		CategoryManager.get_admin_name(category), CategoryManager.describe_question_count(category),
 	])
 	duel_started.emit(selected_player_id, defender_id)
 
@@ -432,6 +451,7 @@ func begin_duel() -> void:
 	if phase != Phase.DUEL or duel_state != DuelState.READY:
 		return
 	duel_state = DuelState.COUNTDOWN
+	_mark_category_played(duel_category)
 	duel_countdown = COUNTDOWN_FROM
 	_duel_step_time = 0.0
 	duel_countdown_changed.emit(duel_countdown)
@@ -592,6 +612,24 @@ func is_final_category_used(category_key: String) -> bool:
 
 
 ## Przywraca wszystkie kategorie finałowe do puli losowania (np. nowy wieczór gry).
+func is_category_played(category_key: String) -> bool:
+	return category_key in played_categories
+
+
+## Wszystkie kategorie wracają do puli "niezagranych" (np. nowy wieczór gry bez restartu).
+func reset_played_categories() -> void:
+	played_categories.clear()
+	_log("Wyczyszczono listę zagranych kategorii – wszystkie są znów \"nowe\".")
+	played_categories_changed.emit()
+
+
+func _mark_category_played(category_key: String) -> void:
+	if category_key.is_empty() or category_key in played_categories:
+		return
+	played_categories.append(category_key)
+	played_categories_changed.emit()
+
+
 func reset_used_final_categories() -> void:
 	used_final_categories.clear()
 	_log("Wszystkie kategorie finałowe wróciły do puli losowania.")
@@ -740,8 +778,14 @@ func get_player_duel_count(player_id: int) -> int:
 	return get_player(player_id).get("duels", 0)
 
 
+## Klucz kategorii gracza (pełna nazwa folderu, np. "Marvel [Aktorzy]").
 func get_player_category(player_id: int) -> String:
 	return get_player(player_id).get("category", "-")
+
+
+## Kategoria gracza tak, jak widać ją na ekranie gry (bez tagu wariantu: "Marvel").
+func get_player_category_display(player_id: int) -> String:
+	return CategoryManager.get_display_name(get_player_category(player_id))
 
 
 func describe_player(player_id: int) -> String:
@@ -756,7 +800,7 @@ func describe_player(player_id: int) -> String:
 ## Nazwa granej kategorii DO WYŚWIETLENIA (zwykle kategoria obrońcy; w finale – kategoria rundy).
 func get_duel_category_name() -> String:
 	if duel_category.is_empty():
-		return get_player_category(defender_id) if defender_id >= 0 else "-"
+		return get_player_category_display(defender_id) if defender_id >= 0 else "-"
 	return CategoryManager.get_display_name(duel_category)
 
 
@@ -882,7 +926,12 @@ func _make_placeholder_name(taken_names: Array) -> String:
 	return "Gracz %d" % number
 
 
-## Losowa kategoria ze zdjęciami, w miarę możliwości jeszcze nieużyta przez innego gracza.
+## Losowa kategoria ze zdjęciami. "Zajęta" = na tej podłodze jest już kategoria o tej samej
+## nazwie wyświetlanej (także inny wariant, np. "Marvel [Postacie]" przy "Marvel [Aktorzy]").
+## Kolejność preferencji:
+## [br]1. niezagrana w tej sesji i niezajęta przez innego gracza na tej podłodze,
+## [br]2. niezajęta na tej podłodze (choć już grana w sesji),
+## [br]3. dowolna (gdy graczy jest więcej niż kategorii).
 func _pick_free_category(used_categories: Array[String]) -> String:
 	var all_names: Array = CategoryManager.get_category_names()
 	var playable := all_names.filter(
@@ -893,8 +942,43 @@ func _pick_free_category(used_categories: Array[String]) -> String:
 	if playable.is_empty():
 		return NO_CATEGORY
 
-	var unused := playable.filter(func(category: String) -> bool: return category not in used_categories)
+	var unused := playable.filter(
+		func(category: String) -> bool: return not _is_display_name_taken(category, used_categories)
+	)
+	var fresh := unused.filter(func(category: String) -> bool: return category not in played_categories)
+	if not fresh.is_empty():
+		return fresh.pick_random()
+	if unused.is_empty():
+		_log("Za mało kategorii o różnych nazwach – nazwa \"%s\" może się powtórzyć na podłodze." % [
+			CategoryManager.get_display_name(playable[0]),
+		])
 	return (unused if not unused.is_empty() else playable).pick_random()
+
+
+## Czy nazwa wyświetlana [param category] (bez tagu wariantu) jest już wśród [param categories].
+func _is_display_name_taken(category: String, categories: Array[String]) -> bool:
+	var display := CategoryManager.get_display_name(category).to_lower()
+	for other in categories:
+		if CategoryManager.get_display_name(other).to_lower() == display:
+			return true
+	return false
+
+
+## Ręcznie przypisana kategoria nie może mieć tej samej nazwy wyświetlanej co kategoria
+## innego gracza z listy (warianty "Marvel [...]" wyglądałyby na podłodze identycznie).
+func _is_valid_roster_category(category: String, ignored_index: int) -> bool:
+	if category.is_empty():
+		return true # Losowa – unikalność zapewni losowanie.
+	for i in roster.size():
+		var other: String = roster[i]["category"]
+		if i == ignored_index or other.is_empty():
+			continue
+		if CategoryManager.get_display_name(other).to_lower() == CategoryManager.get_display_name(category).to_lower():
+			_log("Kategoria \"%s\" koliduje z \"%s\" (%s) – na podłodze obie nazywałyby się \"%s\"." % [
+				category, other, roster[i]["name"], CategoryManager.get_display_name(category),
+			])
+			return false
+	return true
 
 
 ## Złoty podział na kole barw = kolejne kolory są od siebie maksymalnie odległe.

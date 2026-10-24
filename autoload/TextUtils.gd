@@ -14,4 +14,5 @@ static func to_proper(text: String) -> String:
 	return result
 
 
-const WORD_SEPARATORS: PackedStringArray = [" ", "-", "(", "\"", "/"]
+## "[" też – tagi wariantów kategorii: "marvel [aktorzy]" -> "Marvel [Aktorzy]".
+const WORD_SEPARATORS: PackedStringArray = [" ", "-", "(", "[", "\"", "/"]

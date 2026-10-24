@@ -94,7 +94,7 @@ func _on_floor_generated(_columns: int, _rows: int) -> void:
 
 ## Każda runda (także w finale) to jedno zagranie kategorii.
 func _on_duel_started(_attacker_id: int, _defender_id: int) -> void:
-	var category := GameManager.get_duel_category_name()
+	var category := CategoryManager.get_admin_name(GameManager.get_duel_category_key())
 	category_plays[category] = category_plays.get(category, 0) + 1
 	if GameManager.is_final and GameManager.final_round == 1:
 		session["finals"] += 1
@@ -119,7 +119,7 @@ func _on_duel_answered(player_id: int, correct: bool, seconds: float, answer: St
 		"seconds": seconds,
 		"player": stats["name"],
 		"answer": answer,
-		"category": GameManager.get_duel_category_name(),
+		"category": CategoryManager.get_admin_name(GameManager.get_duel_category_key()),
 	}
 	if fastest_answer.is_empty() or seconds < fastest_answer["seconds"]:
 		fastest_answer = record

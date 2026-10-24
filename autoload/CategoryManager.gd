@@ -17,6 +17,10 @@ extends Node
 ## graczy. Ich klucz to [code]"final:" + nazwa[/code] (nazwy mogą powtarzać zwykłe kategorie),
 ## a do wyświetlania służy [method get_display_name].
 ##
+## WARIANTY kategorii: foldery z tagiem w nawiasie kwadratowym, np. "Marvel [Aktorzy]"
+## i "Marvel [Postacie]", to osobne kategorie (osobne klucze i pliki), ale na ekranie gry
+## obie nazywają się "Marvel" ([method get_display_name]). Admin widzi pełną nazwę z tagiem.
+##
 ## Pliki ładowane są w locie z dysku (bez systemu importu Godota) – można je podmieniać
 ## obok pliku .exe i przeskanować folder bez restartu gry.
 ## Plik [code].gdignore[/code] w folderze kategorii blokuje ich import w edytorze.
@@ -119,8 +123,21 @@ func is_final_category(category_name: String) -> bool:
 	return category_name.begins_with(FINAL_PREFIX)
 
 
-## Nazwa do wyświetlenia (bez prefiksu kategorii finałowej).
+## Nazwa do wyświetlenia NA EKRANIE GRY (kafelki, pojedynek): bez prefiksu kategorii
+## finałowej i bez tagu wariantu w nawiasie kwadratowym.
+## [br]"Marvel [Aktorzy]" -> "Marvel", "Marvel [Postacie]" -> "Marvel", "Stolice Europy" -> bez zmian.
+## Pełna nazwa folderu (z tagiem) zostaje kluczem kategorii i ścieżką do plików.
 func get_display_name(category_name: String) -> String:
+	var name_without_prefix := get_admin_name(category_name)
+	var bracket := name_without_prefix.find("[")
+	if bracket <= 0:
+		return name_without_prefix # Brak tagu (albo sam tag) – cała nazwa.
+	var base_name := name_without_prefix.substr(0, bracket).strip_edges()
+	return base_name if not base_name.is_empty() else name_without_prefix
+
+
+## Nazwa dla admina: pełna, z tagiem wariantu (np. "Marvel [Aktorzy]"), bez prefiksu "final:".
+func get_admin_name(category_name: String) -> String:
 	return category_name.trim_prefix(FINAL_PREFIX)
 
 

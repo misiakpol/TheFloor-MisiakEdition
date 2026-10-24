@@ -399,6 +399,12 @@ layout_mode = 2
 tooltip_text = "Ponownie skanuje folder kategorie/ (podfoldery, zdjęcia i utwory)."
 text = "Skanuj foldery"
 
+[node name="ResetPlayedButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Oznacza wszystkie kategorie jako niezagrane (nowe) w tej sesji."
+text = "Odnów zagrane"
+
 [node name="CategoryLists" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn" unique_id=446065597]
 layout_mode = 2
 size_flags_vertical = 3

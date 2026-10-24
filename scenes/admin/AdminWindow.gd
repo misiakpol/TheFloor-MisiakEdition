@@ -15,6 +15,10 @@ const SETUP_TAB := 0
 const GAME_TAB := 1
 const STATS_TAB := 2
 const USED_COLOR := Color(0.5, 0.52, 0.62)
+## Kategorie w sesji: zielona kropka = nowa (jeszcze nie grana), szara = już zagrana.
+const FRESH_DOT_COLOR := Color("06d6a0")
+const PLAYED_DOT_COLOR := Color(0.45, 0.47, 0.58)
+const PLAYED_SUFFIX := "  · zagrana"
 ## Kolumny tabeli rankingu: [nagłówek, wyrównanie do prawej?].
 const RANKING_COLUMNS := [
 	["#", true], ["Gracz", false], ["Tytuły", true], ["Pojedynki W/P", true], ["% wygr.", true],
@@ -55,6 +59,10 @@ var _synced_player_count := GameManager.MIN_PLAYERS
 @onready var _category_count_label: Label = %CategoryCountLabel
 @onready var _reload_button: Button = %ReloadButton
 @onready var _category_list: ItemList = %CategoryList
+@onready var _reset_played_button: Button = %ResetPlayedButton
+## Ikonki statusu kategorii (tworzone w kodzie – bez plików graficznych).
+@onready var _fresh_icon: Texture2D = _make_dot_icon(FRESH_DOT_COLOR)
+@onready var _played_icon: Texture2D = _make_dot_icon(PLAYED_DOT_COLOR)
 @onready var _final_title: Label = %FinalTitle
 @onready var _final_category_list: ItemList = %FinalCategoryList
 @onready var _final_category_option: OptionButton = %FinalCategoryOption
@@ -142,6 +150,7 @@ func _connect_ui_signals() -> void:
 	_reload_button.pressed.connect(CategoryManager.reload)
 	_final_category_option.item_selected.connect(_on_final_category_selected)
 	_reset_final_pool_button.pressed.connect(GameManager.reset_used_final_categories)
+	_reset_played_button.pressed.connect(GameManager.reset_played_categories)
 	_reset_stats_button.pressed.connect(_on_reset_stats_pressed)
 	_random_player_button.pressed.connect(GameManager.select_random_player)
 	_duel_button.pressed.connect(_on_duel_pressed)
@@ -172,6 +181,7 @@ func _connect_manager_signals() -> void:
 	CategoryManager.categories_loaded.connect(_on_categories_loaded)
 	CategoryManager.load_failed.connect(_on_categories_load_failed)
 	GameManager.used_final_categories_changed.connect(_populate_final_categories)
+	GameManager.played_categories_changed.connect(_on_played_categories_changed)
 	StatsManager.stats_changed.connect(_refresh_stats)
 
 
@@ -341,8 +351,9 @@ func _populate_opponents() -> void:
 
 	for player_id in GameManager.get_neighbor_player_ids(GameManager.selected_player_id):
 		var category := GameManager.get_player_category(player_id)
-		_opponent_option.add_item("%s — %s (%s)" % [
+		_opponent_option.add_icon_item(_category_icon(category), "%s — %s (%s)%s" % [
 			GameManager.get_player_name(player_id), category, CategoryManager.describe_question_count(category),
+			PLAYED_SUFFIX if GameManager.is_category_played(category) else "",
 		], player_id)
 
 	if _opponent_option.item_count > 0:
@@ -392,9 +403,10 @@ func _populate_player_list() -> void:
 	for i in GameManager.roster.size():
 		var entry: Dictionary = GameManager.roster[i]
 		var category: String = entry["category"]
-		var index := _player_list.add_item("%d. %s — %s" % [
+		var index := _player_list.add_item("%d. %s — %s%s" % [
 			i + 1, entry["name"], category if not category.is_empty() else RANDOM_CATEGORY_TEXT,
-		])
+			PLAYED_SUFFIX if GameManager.is_category_played(category) else "",
+		], _category_icon(category) if not category.is_empty() else null)
 		if not category.is_empty() and not CategoryManager.has_category(category):
 			_player_list.set_item_custom_fg_color(index, WARNING_COLOR)
 			_player_list.set_item_tooltip(index, "Brak folderu tej kategorii – gracz dostanie losową.")
@@ -428,11 +440,19 @@ func _populate_category_views() -> void:
 		var category_name: String = category["name"]
 		var count_text := CategoryManager.describe_question_count(category_name)
 		var is_music: bool = category["kind"] == CategoryManager.KIND_MUSIC
-		_player_category_option.add_item("%s (%s)" % [category_name, count_text])
+		var played := GameManager.is_category_played(category_name)
+		var played_text := PLAYED_SUFFIX if played else ""
+		_player_category_option.add_icon_item(_category_icon(category_name),
+				"%s (%s)%s" % [category_name, count_text, played_text])
 		_player_category_option.set_item_metadata(_player_category_option.item_count - 1, category_name)
 
-		var index := _category_list.add_item("%s%s — %s" % ["[muz.] " if is_music else "", category_name, count_text])
+		var index := _category_list.add_item("%s%s — %s%s" % [
+			"[muz.] " if is_music else "", category_name, count_text, played_text,
+		], _category_icon(category_name))
 		_category_list.set_item_tooltip(index, category["path"])
+		if played:
+			_category_list.set_item_custom_fg_color(index, USED_COLOR)
+			_category_list.set_item_tooltip(index, "Zagrana w tej sesji – losowanie wybierze ją dopiero, gdy zabraknie nowych.")
 		if category["questions"].is_empty():
 			_category_list.set_item_custom_fg_color(index, WARNING_COLOR)
 			_category_list.set_item_tooltip(index, "Pusty folder: %s" % category["path"])
@@ -440,10 +460,37 @@ func _populate_category_views() -> void:
 			_category_list.set_item_tooltip(index, "Kategoria muzyczna bez obrazka tła (dodaj np. tlo.jpg).")
 
 	_select_category(previous_category)
-	_category_count_label.text = "Kategorie: %d  (folder %s/)" % [
-		CategoryManager.categories.size(), CategoryManager.CATEGORIES_DIR,
+	var played_count := CategoryManager.categories.filter(
+		func(category: Dictionary) -> bool: return GameManager.is_category_played(category["name"])
+	).size()
+	_category_count_label.text = "Kategorie: %d  ·  nowe: %d  ·  zagrane: %d" % [
+		CategoryManager.categories.size(), CategoryManager.categories.size() - played_count, played_count,
 	]
+	_reset_played_button.disabled = GameManager.played_categories.is_empty()
 	_populate_final_categories()
+
+
+func _on_played_categories_changed() -> void:
+	_populate_category_views()
+	_populate_player_list()
+	_populate_opponents()
+
+
+func _category_icon(category_name: String) -> Texture2D:
+	return _played_icon if GameManager.is_category_played(category_name) else _fresh_icon
+
+
+## Mała, wygładzona kropka (14x14) – ikonka statusu kategorii.
+func _make_dot_icon(color: Color) -> Texture2D:
+	var icon_size := 14
+	var image := Image.create(icon_size, icon_size, false, Image.FORMAT_RGBA8)
+	var center := Vector2(icon_size, icon_size) * 0.5
+	for y in icon_size:
+		for x in icon_size:
+			var distance := Vector2(x + 0.5, y + 0.5).distance_to(center)
+			var alpha := clampf(icon_size * 0.38 - distance + 0.5, 0.0, 1.0)
+			image.set_pixel(x, y, Color(color, alpha))
+	return ImageTexture.create_from_image(image)
 
 
 ## Podgląd folderu "kategorie final" + ręczny wybór kategorii rundy rozstrzygającej.
@@ -453,7 +500,7 @@ func _populate_final_categories() -> void:
 	for category in CategoryManager.final_categories:
 		var key: String = category["name"]
 		var index := _final_category_list.add_item("%s — %s" % [
-			CategoryManager.get_display_name(key), CategoryManager.describe_question_count(key),
+			CategoryManager.get_admin_name(key), CategoryManager.describe_question_count(key),
 		])
 		_final_category_list.set_item_tooltip(index, category["path"])
 		if category["questions"].is_empty():
@@ -471,7 +518,7 @@ func _populate_final_categories() -> void:
 	_final_category_option.add_item("(losowa z puli: %d niezużytych)" % unused_count)
 	_final_category_option.set_item_metadata(0, "")
 	for key in CategoryManager.get_final_category_keys():
-		_final_category_option.add_item("[finał] %s" % CategoryManager.get_display_name(key))
+		_final_category_option.add_item("[finał] %s" % CategoryManager.get_admin_name(key))
 		_final_category_option.set_item_metadata(_final_category_option.item_count - 1, key)
 	for category_name in CategoryManager.get_category_names():
 		if not CategoryManager.get_questions(category_name).is_empty():

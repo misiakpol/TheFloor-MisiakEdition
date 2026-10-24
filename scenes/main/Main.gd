@@ -148,7 +148,7 @@ func _on_floor_generated(columns: int, rows: int) -> void:
 		_grid.add_child(tile)
 		tile.setup(i, gap)
 		tile.set_territory(GameManager.get_player_name(owner_id),
-				GameManager.get_player_category(owner_id), GameManager.get_player_color(owner_id))
+				GameManager.get_player_category_display(owner_id), GameManager.get_player_color(owner_id))
 		_tiles.append(tile)
 		player_count += 1
 
@@ -219,7 +219,7 @@ func _on_player_selected(player_id: int) -> void:
 		if _displayed_owners[i] == player_id:
 			_tiles[i].play_selection_burst()
 	_show_banner("Wylosowano: %s  •  %s" % [
-		GameManager.get_player_name(player_id), GameManager.get_player_category(player_id),
+		GameManager.get_player_name(player_id), GameManager.get_player_category_display(player_id),
 	], ACCENT_COLOR)
 
 
@@ -370,7 +370,7 @@ func _fit_tiles() -> void:
 ## rozlewa się razem z falą: szczeliny znikają i narożniki prostują się tam, gdzie dotarła.
 func _begin_radial_capture(winner_id: int, tile_indices: PackedInt32Array, radial: ShaderMaterial) -> void:
 	var winner_name := GameManager.get_player_name(winner_id)
-	var winner_category := GameManager.get_player_category(winner_id)
+	var winner_category := GameManager.get_player_category_display(winner_id)
 	var winner_color := GameManager.get_player_color(winner_id)
 	AudioManager.play_sfx(AudioManager.SFX_WOOSH)
 
