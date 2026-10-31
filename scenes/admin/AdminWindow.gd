@@ -13,18 +13,26 @@ extends Window
 
 const SETUP_TAB := 0
 const GAME_TAB := 1
-const STATS_TAB := 2
+const QUICK_TAB := 2
+const STATS_TAB := 3
 const USED_COLOR := Color(0.5, 0.52, 0.62)
 ## Kategorie w sesji: zielona kropka = nowa (jeszcze nie grana), szara = już zagrana.
 const FRESH_DOT_COLOR := Color("06d6a0")
 const PLAYED_DOT_COLOR := Color(0.45, 0.47, 0.58)
 const PLAYED_SUFFIX := "  · zagrana"
-## Kolumny tabeli rankingu: [nagłówek, wyrównanie do prawej?].
+## Kolumny tabeli rankingu: [nagłówek, wyrównanie do prawej?, klucz sortowania].
+## "Pojedynki W/P" sortują się po liczbie wygranych.
 const RANKING_COLUMNS := [
-	["#", true], ["Gracz", false], ["Tytuły", true], ["Pojedynki W/P", true], ["% wygr.", true],
-	["Pola", true], ["Seria", true], ["Poprawne", true], ["Pasy", true], ["Śr. czas", true],
-	["Najszybsza", true], ["Finał (rundy)", true],
+	["#", true, "rank"], ["Gracz", false, "name"], ["Tytuły", true, "titles"],
+	["Pojedynki W/P", true, "duels_won"], ["% wygr.", true, "win_rate"],
+	["Pola", true, "tiles_captured"], ["Seria", true, "best_streak"], ["Poprawne", true, "correct"],
+	["Pasy", true, "passes"], ["Śr. czas", true, "avg_answer"], ["Najszybsza", true, "fastest"],
+	["Finał (rundy)", true, "final_rounds_won"],
 ]
+## Kolumny, które przy pierwszym kliknięciu sortują się rosnąco (reszta: od największej).
+const ASCENDING_FIRST_KEYS: PackedStringArray = ["rank", "name"]
+const SORT_DESCENDING_MARK := " ▼"
+const SORT_ASCENDING_MARK := " ▲"
 const LOG_TIME_COLOR := "#8a8fb0"
 const ERROR_COLOR := "#ef476f"
 const WARNING_COLOR := Color(1.0, 0.62, 0.62)
@@ -32,6 +40,10 @@ const ACTIVE_COLOR := Color("ffd166")
 const INACTIVE_COLOR := Color(0.55, 0.57, 0.7)
 const DANGER_COLOR := Color("ef476f")
 const RANDOM_CATEGORY_TEXT := "(losowa kategoria)"
+
+## Sortowanie tabeli rankingu (domyślnie wg miejsca w rankingu).
+var _sort_column := 0
+var _sort_descending := false
 
 ## Ostatnia liczba graczy ustawiona automatycznie z listy (do wykrycia ręcznej zmiany).
 var _synced_player_count := GameManager.MIN_PLAYERS
@@ -72,6 +84,12 @@ var _synced_player_count := GameManager.MIN_PLAYERS
 @onready var _ranking_tree: Tree = %RankingTree
 @onready var _facts_label: RichTextLabel = %FactsLabel
 @onready var _reset_stats_button: Button = %ResetStatsButton
+
+# Szybki pojedynek
+@onready var _quick_name_a: LineEdit = %QuickNameA
+@onready var _quick_name_b: LineEdit = %QuickNameB
+@onready var _quick_category_option: OptionButton = %QuickCategoryOption
+@onready var _quick_start_button: Button = %QuickStartButton
 ## Szyna AudioManagera -> [suwak, etykieta z %].
 @onready var _duel_time_spin: SpinBox = %DuelTimeSpin
 @onready var _save_settings_button: Button = %SaveSettingsButton
@@ -114,6 +132,7 @@ var _answer_video_started_ms := 0
 func _ready() -> void:
 	_tabs.set_tab_title(SETUP_TAB, "Konfiguracja")
 	_tabs.set_tab_title(GAME_TAB, "Rozgrywka / Pojedynek")
+	_tabs.set_tab_title(QUICK_TAB, "Szybki pojedynek")
 	_tabs.set_tab_title(STATS_TAB, "Statystyki")
 	_setup_ranking_tree()
 	_refresh_stats()
@@ -155,6 +174,7 @@ func _connect_ui_signals() -> void:
 	_final_category_option.item_selected.connect(_on_final_category_selected)
 	_reset_final_pool_button.pressed.connect(GameManager.reset_used_final_categories)
 	_reset_played_button.pressed.connect(GameManager.reset_played_categories)
+	_quick_start_button.pressed.connect(_on_quick_start_pressed)
 	_reset_stats_button.pressed.connect(_on_reset_stats_pressed)
 	_random_player_button.pressed.connect(GameManager.select_random_player)
 	_duel_button.pressed.connect(_on_duel_pressed)
@@ -187,6 +207,10 @@ func _connect_manager_signals() -> void:
 	GameManager.log_message.connect(_append_log)
 	GameManager.floor_generated.connect(func(_columns: int, _rows: int) -> void: _tabs.current_tab = GAME_TAB)
 	GameManager.duel_started.connect(func(_attacker: int, _defender: int) -> void: _tabs.current_tab = GAME_TAB)
+	GameManager.duel_ended.connect(func() -> void:
+		if GameManager.is_quick_duel:
+			_tabs.current_tab = QUICK_TAB
+	)
 	GameManager.duel_image_changed.connect(_on_duel_image_changed)
 	GameManager.duel_turn_changed.connect(_update_turn_markers.unbind(1))
 	GameManager.duel_time_updated.connect(_update_duel_times)
@@ -330,6 +354,7 @@ func _show_answer_video(video: VideoStream) -> void:
 #region Odświeżanie widoku – rozgrywka
 
 func _refresh_ui() -> void:
+	_refresh_quick_start()
 	var phase: int = GameManager.phase
 	var is_duel := phase == GameManager.Phase.DUEL
 	_game_view.visible = not is_duel
@@ -533,6 +558,7 @@ func _make_dot_icon(color: Color) -> Texture2D:
 ## Podgląd folderu "kategorie final" + ręczny wybór kategorii rundy rozstrzygającej.
 ## Lista wyboru: losowa (domyślnie), kategorie finałowe, a na końcu zwykłe – na wszelki wypadek.
 func _populate_final_categories() -> void:
+	_populate_quick_categories()
 	_final_category_list.clear()
 	for category in CategoryManager.final_categories:
 		var key: String = category["name"]
@@ -570,6 +596,47 @@ func _populate_final_categories() -> void:
 	_final_category_option.select(selected_index)
 	if selected_index == 0 and not GameManager.final_category_override.is_empty():
 		GameManager.set_final_category_override("")
+
+
+## Lista szybkiego pojedynku: najpierw zwykłe kategorie, potem finałowe (bez pustych).
+## Kropka i dopisek pokazują, co już padło w tej sesji.
+func _populate_quick_categories() -> void:
+	var previous_key := _get_quick_category()
+	_quick_category_option.clear()
+	for key in CategoryManager.get_category_names():
+		if not CategoryManager.get_questions(key).is_empty():
+			_add_quick_category(key, GameManager.is_category_played(key))
+	var final_keys := CategoryManager.get_final_category_keys()
+	if not final_keys.is_empty():
+		_quick_category_option.add_separator("Kategorie finałowe")
+	for key in final_keys:
+		_add_quick_category(key, GameManager.is_final_category_used(key))
+
+	for i in _quick_category_option.item_count:
+		if str(_quick_category_option.get_item_metadata(i)) == previous_key:
+			_quick_category_option.select(i)
+	_refresh_quick_start()
+
+
+func _add_quick_category(key: String, played: bool) -> void:
+	_quick_category_option.add_icon_item(_played_icon if played else _fresh_icon, "%s (%s)%s" % [
+		CategoryManager.get_admin_name(key), CategoryManager.describe_question_count(key),
+		PLAYED_SUFFIX if played else "",
+	])
+	_quick_category_option.set_item_metadata(_quick_category_option.item_count - 1, key)
+
+
+func _get_quick_category() -> String:
+	var index := _quick_category_option.selected
+	return "" if index < 0 else str(_quick_category_option.get_item_metadata(index))
+
+
+func _refresh_quick_start() -> void:
+	_quick_start_button.disabled = not GameManager.can_start_quick_duel() or _get_quick_category().is_empty()
+
+
+func _on_quick_start_pressed() -> void:
+	GameManager.start_quick_duel(_quick_name_a.text, _quick_name_b.text, _get_quick_category())
 
 
 func _on_final_category_selected(index: int) -> void:
@@ -610,6 +677,8 @@ func _refresh_duel_view() -> void:
 	var is_timeout := state == GameManager.DuelState.TIMEOUT
 
 	_duel_title_label.text = "%s  vs  %s" % [attacker_name, defender_name]
+	if GameManager.is_quick_duel:
+		_duel_title_label.text = "SZYBKI POJEDYNEK\n" + _duel_title_label.text
 	if GameManager.is_final:
 		_duel_title_label.text = "%s\n%s  %d : %d  %s" % [
 			GameManager.get_final_round_title(), attacker_name,
@@ -709,12 +778,65 @@ func _setup_ranking_tree() -> void:
 			_ranking_tree.set_column_custom_minimum_width(i, 44) # Bez tego "#" ma szerokość 0.
 		if RANKING_COLUMNS[i][1]:
 			_ranking_tree.set_column_title_alignment(i, HORIZONTAL_ALIGNMENT_RIGHT)
+	_ranking_tree.column_title_clicked.connect(_on_ranking_column_clicked)
+	_update_ranking_titles()
+
+
+## Klik w nagłówek: nowa kolumna = domyślny kierunek, ta sama = odwrócenie kolejności.
+func _on_ranking_column_clicked(column: int, mouse_button: int) -> void:
+	if mouse_button != MOUSE_BUTTON_LEFT:
+		return
+	if column == _sort_column:
+		_sort_descending = not _sort_descending
+	else:
+		_sort_column = column
+		_sort_descending = RANKING_COLUMNS[column][2] not in ASCENDING_FIRST_KEYS
+	_update_ranking_titles()
+	_refresh_stats()
+
+
+## Strzałka przy nagłówku kolumny, po której sortujemy.
+func _update_ranking_titles() -> void:
+	for i in RANKING_COLUMNS.size():
+		var mark := ""
+		if i == _sort_column:
+			mark = SORT_DESCENDING_MARK if _sort_descending else SORT_ASCENDING_MARK
+		_ranking_tree.set_column_title(i, RANKING_COLUMNS[i][0] + mark)
+
+
+func _get_sorted_ranking() -> Array[Dictionary]:
+	var ranking := StatsManager.get_ranking()
+	var key: String = RANKING_COLUMNS[_sort_column][2]
+	ranking.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return _sorts_before(a, b, key))
+	return ranking
+
+
+## Kolejność wierszy. Wiersze bez wartości ("-") zawsze na końcu, a remisy rozstrzyga ranking.
+func _sorts_before(a: Dictionary, b: Dictionary, key: String) -> bool:
+	var a_missing := _is_stat_missing(a, key)
+	var b_missing := _is_stat_missing(b, key)
+	if a_missing != b_missing:
+		return b_missing
+	if not a_missing:
+		if key == "name":
+			var order: int = a["name"].naturalnocasecmp_to(b["name"])
+			if order != 0:
+				return (order < 0) != _sort_descending
+		elif a[key] != b[key]:
+			return (a[key] > b[key]) == _sort_descending
+	return a["rank"] < b["rank"]
+
+
+func _is_stat_missing(entry: Dictionary, key: String) -> bool:
+	if key == "win_rate":
+		return entry["duels"] == 0
+	return key in ["avg_answer", "fastest"] and entry[key] < 0.0
 
 
 func _refresh_stats() -> void:
 	_ranking_tree.clear()
 	var root := _ranking_tree.create_item()
-	for entry in StatsManager.get_ranking():
+	for entry in _get_sorted_ranking():
 		var item := _ranking_tree.create_item(root)
 		var values := [
 			str(entry["rank"]),

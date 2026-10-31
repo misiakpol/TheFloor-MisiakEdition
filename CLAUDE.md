@@ -32,7 +32,7 @@ AdminWindow --(metody)--> GameManager --(sygnały)--> Main / DuelScreen / AdminW
 - `scenes/main/Main.tscn` – ekran TV: siatka kafelków (`GridContainer` w `CenterContainer`), baner, `DuelScreen`, `WinnerScreen`, `Confetti` (tworzone w kodzie), `AdminWindow` (dziecko-okno; `embed_subwindows=false`). Ustawia okna na monitorach (TV na monitorze 1, fullscreen przy >1 monitorze).
 - `scenes/tile/Tile.tscn` – pojedyncze pole; rysuje się samo w `_draw`.
 - `scenes/duel/DuelScreen.tscn` – ekran pojedynku (przykrywa podłogę, `z_index = 10`).
-- `scenes/admin/AdminWindow.tscn` – konsola z 3 zakładkami: **Konfiguracja**, **Rozgrywka / Pojedynek**, **Statystyki**.
+- `scenes/admin/AdminWindow.tscn` – konsola z 4 zakładkami: **Konfiguracja**, **Rozgrywka / Pojedynek**, **Szybki pojedynek**, **Statystyki**.
 - `scenes/effects/WinnerScreen.tscn` (`z_index = 50`), `Confetti.gd` (CPUParticles2D, `z_index = 100`).
 
 ### Fazy (`GameManager.Phase`)
@@ -47,6 +47,7 @@ Stany pojedynku (`DuelState`): `READY → COUNTDOWN (3-2-1) → RUNNING ⇄ PENA
 - **Pytanie-wideo** (`DuelScreen`: `%VideoBox` = `AspectRatioContainer` z `%VideoRect` = `VideoStreamPlayer`): gra w pętli w miejscu zdjęcia aż do zmiany pytania; proporcje z pierwszej klatki; przyciemniane w karze; pauzowane z pojedynkiem; przy końcu czasu zatrzymane na ostatniej klatce. Brak klatki przez ~1 s (lub „koniec” < 300 ms po starcie) = plik uszkodzony → komunikat zamiast czarnego pola i bez pętli restartów (`is_playing()` przy złym pliku zwraca true – nie polegaj na nim). Konsola admina pokazuje wyciszony podgląd (`%AnswerVideo`).
 - **Po pojedynku**: kategoria obrońcy znika z gry; **zwycięzca (ktokolwiek) gra dalej kategorią atakującego**. Przegrany odpada, całe jego terytorium przechodzi na zwycięzcę.
 - **Finał** (zostało 2 graczy): rundy do 2 wygranych – runda 1: kategoria obrońcy, runda 2 (dogrywka): kategoria atakującego, runda 3 przy 1:1: kategoria z `kategorie final/` (losowa z puli **niezużytych w sesji** albo wybrana ręcznie przez admina; po wyczerpaniu – zwykła niezagrana w tym finale). Przed rundą 1 na TV przelatuje napis „FINAŁ”.
+- **Szybki pojedynek** (`GameManager.start_quick_duel()`): jednorazowa runda bez podłogi, kategoria zwykła lub finałowa, imiona opcjonalne („Gracz A/B”). Tymczasowi gracze mają id od `QUICK_PLAYER_BASE_ID` (1000; `get_player` czyta je z `_quick_players`). Dostępny w `NO_FLOOR/IDLE/PLAYER_SELECTED/GAME_OVER`, po końcu lub przerwaniu `_leave_quick_duel()` przywraca fazę i wybranego gracza. Nie rusza podłogi; `StatsManager` go pomija (`is_quick_duel`); START oznacza kategorię jako zagraną, a finałową także jako zużytą. Koniec: `quick_duel_finished` → `WinnerScreen` + konfetti na 5 s, bez muzyki zwycięstwa.
 - **Koniec gry**: fala przejęcia → po `WINNER_REVEAL_DELAY` (1.5 s) pełnoekranowy `WinnerScreen` + konfetti + losowa muzyka zwycięstwa (max 60 s, gaszona też przy nowej podłodze).
 - **Kategorie w sesji**: zagrana = kliknięto START w tej kategorii (`played_categories`). Losowanie kategorii dla graczy omija najpierw zagrane, a na jednej podłodze **nazwy wyświetlane muszą być unikalne** (dotyczy też wariantów, patrz niżej; ręczne przypisanie kolidującego wariantu jest blokowane).
 
@@ -85,7 +86,7 @@ audio/music/win/*.ogg           <- muzyka zwycięstwa, ładowana w locie (.gdign
 ## Konsola admina – ważne szczegóły
 - Konfiguracja: lista graczy (imiona → `to_proper`, Enter dodaje i zostawia focus – `keep_editing_on_text_submit` + `edit()` deferred), liczba graczy (podąża za listą), kategorie zwykłe i finałowe (zielona/szara kropka = nowa/zagrana; „Odnów zagrane”, „Odnów pulę”), wybór kategorii rundy 3, czas na odpowiedź, głośności, „Zapisz ustawienia”.
 - Rozgrywka: losowanie, wybór przeciwnika, w fazie DUEL panel sterowania. Skróty (Button.shortcut): **Enter/Spacja** = START / poprawna, **P** = pas. Przyciski pojedynku mają `focus_mode = 0`.
-- Statystyki: ranking (`Tree`) wg tytuły > wygrane pojedynki > % > pola > poprawne; ciekawostki sesji; reset wymaga dwóch kliknięć.
+- Statystyki: ranking (`Tree`) wg tytuły > wygrane pojedynki > % > pola > poprawne; ciekawostki sesji; reset wymaga dwóch kliknięć. Klik w nagłówek (`column_title_clicked`) sortuje tylko widok w konsoli (`_sort_column`, `_sort_descending`, klucz w `RANKING_COLUMNS`): pierwszy klik od największej (`#` i `Gracz` rosnąco), kolejny odwraca; „Pojedynki W/P” wg wygranych; „-” zawsze na końcu; remisy i kolory podium wg rankingu.
 
 ## Konwencje i pułapki
 

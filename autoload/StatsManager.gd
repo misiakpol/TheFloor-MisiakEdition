@@ -94,6 +94,8 @@ func _on_floor_generated(_columns: int, _rows: int) -> void:
 
 ## Każda runda (także w finale) to jedno zagranie kategorii.
 func _on_duel_started(_attacker_id: int, _defender_id: int) -> void:
+	if GameManager.is_quick_duel:
+		return # Szybki pojedynek nie liczy się do statystyk.
 	var category := CategoryManager.get_admin_name(GameManager.get_duel_category_key())
 	category_plays[category] = category_plays.get(category, 0) + 1
 	if GameManager.is_final and GameManager.final_round == 1:
@@ -102,6 +104,8 @@ func _on_duel_started(_attacker_id: int, _defender_id: int) -> void:
 
 
 func _on_duel_answered(player_id: int, correct: bool, seconds: float, answer: String) -> void:
+	if GameManager.is_quick_duel:
+		return # Szybki pojedynek nie liczy się do statystyk.
 	var stats := _stats_for(GameManager.get_player_name(player_id))
 	if not correct:
 		stats["passes"] += 1
@@ -129,6 +133,8 @@ func _on_duel_answered(player_id: int, correct: bool, seconds: float, answer: St
 
 
 func _on_duel_timeout(loser_side: int) -> void:
+	if GameManager.is_quick_duel:
+		return # Szybki pojedynek nie liczy się do statystyk.
 	_stats_for(GameManager.get_player_name(GameManager.get_duel_player_id(loser_side)))["timeouts"] += 1
 	session["timeouts"] += 1
 	stats_changed.emit()

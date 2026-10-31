@@ -62,6 +62,8 @@ signal final_round_finished(round_winner_id: int, round_number: int)
 signal territory_captured(winner_id: int, loser_id: int, tile_indices: PackedInt32Array)
 signal selection_cleared
 signal game_over(winner_id: int)
+## Szybki pojedynek rozstrzygnięty (gracze tymczasowi już nie istnieją – stąd dane w sygnale).
+signal quick_duel_finished(winner_name: String, winner_color: Color, category_name: String)
 ## Ogólny sygnał "coś się zmieniło" – wygodny do odświeżania UI admina.
 signal state_changed
 signal log_message(text: String)
@@ -89,6 +91,10 @@ const COUNTDOWN_FROM := 3
 const PASS_PENALTY := 3
 const NO_CATEGORY := "Brak kategorii"
 const ROLL_DURATION := 2.0
+## Id tymczasowych graczy szybkiego pojedynku (poza zakresem graczy podłogi).
+const QUICK_PLAYER_BASE_ID := 1000
+const QUICK_PLAYER_COLORS: Array[Color] = [Color("c9803f"), Color("3f7fc9")]
+const QUICK_DEFAULT_NAMES: PackedStringArray = ["Gracz A", "Gracz B"]
 const FINAL_ROUNDS_TO_WIN := 2
 
 var phase: Phase = Phase.NO_FLOOR
@@ -134,6 +140,11 @@ var is_final := false
 var final_round := 0
 ## Wygrane rundy finału: [ATTACKER_SIDE, DEFENDER_SIDE].
 var final_score := PackedInt32Array([0, 0])
+## Szybki pojedynek: jednorazowy, bez podłogi i statystyk; po nim wraca poprzedni stan gry.
+var is_quick_duel := false
+var _quick_players: Array[Dictionary] = []
+## Stan gry sprzed szybkiego pojedynku: { phase, selected_player_id, selected_is_duel_winner }.
+var _state_before_quick: Dictionary = {}
 ## Kategoria rundy rozstrzygającej wybrana ręcznie przez admina (klucz "final:..." albo
 ## zwykła nazwa). Pusta = losowa z folderu "kategorie final".
 var final_category_override := ""
@@ -360,6 +371,11 @@ func step_down() -> void:
 
 
 func cancel_selection() -> void:
+	if is_quick_duel:
+		_log("Przerwano szybki pojedynek.")
+		_end_duel()
+		_leave_quick_duel()
+		return
 	if phase not in [Phase.PLAYER_SELECTED, Phase.DUEL]:
 		return
 	if phase == Phase.DUEL:
@@ -423,6 +439,69 @@ func start_duel(target_player_id: int) -> void:
 	_set_phase(Phase.DUEL)
 
 
+## Czy można teraz odpalić szybki pojedynek (nie w trakcie pojedynku ani ruletki).
+func can_start_quick_duel() -> bool:
+	return phase in [Phase.NO_FLOOR, Phase.IDLE, Phase.PLAYER_SELECTED, Phase.GAME_OVER]
+
+
+## Jednorazowy pojedynek bez podłogi: dowolna kategoria zwykła lub finałowa ([param category_key]),
+## jedna runda, puste imiona = "Gracz A/B". Podłoga, gracze i statystyki zostają nietknięte.
+func start_quick_duel(name_a: String, name_b: String, category_key: String) -> bool:
+	if not can_start_quick_duel():
+		_log("Szybki pojedynek można odpalić dopiero po zakończeniu bieżącej akcji.")
+		return false
+	if CategoryManager.get_questions(category_key).is_empty():
+		_log("Wybierz kategorię ze zdjęciami, utworami lub wideo.")
+		return false
+
+	var names := PackedStringArray()
+	for i in 2:
+		var clean_name := TextUtils.to_proper([name_a, name_b][i])
+		names.append(clean_name if not clean_name.is_empty() else QUICK_DEFAULT_NAMES[i])
+	if names[0].to_lower() == names[1].to_lower():
+		_log("Gracze szybkiego pojedynku muszą mieć różne imiona.")
+		return false
+
+	_quick_players.clear()
+	for i in 2:
+		_quick_players.append({
+			"id": QUICK_PLAYER_BASE_ID + i, "name": names[i], "color": QUICK_PLAYER_COLORS[i],
+			"category": "-", "alive": true, "duels": 0,
+		})
+	_state_before_quick = {
+		"phase": phase,
+		"selected_player_id": selected_player_id,
+		"selected_is_duel_winner": selected_is_duel_winner,
+	}
+	is_quick_duel = true
+	is_final = false
+	final_round = 0
+	selected_player_id = QUICK_PLAYER_BASE_ID
+	defender_id = QUICK_PLAYER_BASE_ID + 1
+	_start_round(category_key)
+	_set_phase(Phase.DUEL)
+	return true
+
+
+func _finish_quick_duel(attacker_wins: bool) -> void:
+	var winner := get_player(selected_player_id if attacker_wins else defender_id)
+	var category := get_duel_category_name()
+	_log("Szybki pojedynek wygrywa %s (kategoria: %s)." % [winner["name"], category])
+	_end_duel()
+	_leave_quick_duel()
+	quick_duel_finished.emit(winner["name"], winner["color"], category)
+
+
+## Przywraca grę dokładnie do stanu sprzed szybkiego pojedynku.
+func _leave_quick_duel() -> void:
+	is_quick_duel = false
+	_quick_players.clear()
+	selected_player_id = _state_before_quick["selected_player_id"]
+	selected_is_duel_winner = _state_before_quick["selected_is_duel_winner"]
+	defender_id = -1
+	_set_phase(_state_before_quick["phase"])
+
+
 ## Przygotowuje (kolejną) rundę: nowa kategoria i talia, zegary od 45 s, czeka na START.
 func _start_round(category: String) -> void:
 	duel_category = category
@@ -452,6 +531,10 @@ func begin_duel() -> void:
 		return
 	duel_state = DuelState.COUNTDOWN
 	_mark_category_played(duel_category)
+	# Kategoria finałowa zagrana w szybkim pojedynku też jest już "zużyta" w tej sesji.
+	if CategoryManager.is_final_category(duel_category) and duel_category not in used_final_categories:
+		used_final_categories.append(duel_category)
+		used_final_categories_changed.emit()
 	duel_countdown = COUNTDOWN_FROM
 	_duel_step_time = 0.0
 	duel_countdown_changed.emit(duel_countdown)
@@ -509,6 +592,9 @@ func finish_duel() -> void:
 ## Ręczne rozstrzygnięcie. [param attacker_wins] = true -> wygrywa wylosowany gracz.
 func resolve_duel(attacker_wins: bool) -> void:
 	if phase != Phase.DUEL:
+		return
+	if is_quick_duel:
+		_finish_quick_duel(attacker_wins)
 		return
 	if is_final and not _finish_final_round(attacker_wins):
 		return # Finał trwa – zaczęła się kolejna runda.
@@ -761,6 +847,9 @@ func _end_duel() -> void:
 #region Zapytania (read-only)
 
 func get_player(player_id: int) -> Dictionary:
+	if player_id >= QUICK_PLAYER_BASE_ID:
+		var quick_index := player_id - QUICK_PLAYER_BASE_ID
+		return _quick_players[quick_index] if quick_index < _quick_players.size() else {}
 	if player_id < 0 or player_id >= players.size():
 		return {}
 	return players[player_id]

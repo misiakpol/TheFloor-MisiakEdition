@@ -105,7 +105,7 @@ func _on_duel_started(attacker_id: int, defender_id: int) -> void:
 	_countdown_label.hide()
 	_hide_penalty(true)
 	_placeholder_label.text = "PRZYGOTUJCIE SIĘ!"
-	_duel_caption.text = "POJEDYNEK"
+	_duel_caption.text = "SZYBKI POJEDYNEK" if GameManager.is_quick_duel else "POJEDYNEK"
 	if GameManager.is_final:
 		# Np. "FINAŁ · DOGRYWKA  •  1 : 0" (wynik w rundach: lewy gracz : prawy gracz).
 		_duel_caption.text = "%s  •  %d : %d" % [

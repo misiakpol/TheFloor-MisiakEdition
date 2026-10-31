@@ -21,6 +21,7 @@ const RADIAL_CAPTURE_SHADER: Shader = preload("res://scenes/tile/radial_capture.
 
 const APPEAR_WAVE_DELAY := 0.07 ## Opóźnienie fali wejścia na jednostkę odległości od środka.
 const CAPTURE_DURATION := 3.0 ## Czas radialnego malowania całej przejmowanej strefy.
+const QUICK_WINNER_DURATION := 5.0 ## Jak długo stoi ogłoszenie zwycięzcy szybkiego pojedynku.
 const WINNER_REVEAL_DELAY := 1.5 ## Pauza po zapełnieniu podłogi, zanim pojawi się ekran zwycięzcy.
 const CAPTURE_EDGE_WIDTH := 36.0 ## Jasne czoło fali (piksele) – patrz radial_capture.gdshader.
 const ROLL_HOPS := 18 ## Liczba przeskoków podświetlenia w ruletce.
@@ -66,6 +67,8 @@ var _capturing_tiles: Array[int] = []
 ## Pola, które po fali przejdą do zwycięzcy, i sam zwycięzca (-1 = brak fali).
 var _capture_new_tiles := PackedInt32Array()
 var _capture_winner := -1
+## Unieważnia opóźnione kroki ogłoszenia zwycięzcy szybkiego pojedynku.
+var _quick_winner_token := 0
 
 @onready var _layout: VBoxContainer = %Layout
 @onready var _top_bar: HBoxContainer = %TopBar
@@ -116,6 +119,7 @@ func _connect_game_signals() -> void:
 	GameManager.player_roll_started.connect(_on_player_roll_started)
 	GameManager.player_selected.connect(_on_player_selected)
 	GameManager.duel_started.connect(_on_duel_started)
+	GameManager.quick_duel_finished.connect(_on_quick_duel_finished)
 	GameManager.territory_captured.connect(_on_territory_captured)
 	GameManager.selection_cleared.connect(_on_selection_cleared)
 	GameManager.game_over.connect(_on_game_over)
@@ -123,6 +127,7 @@ func _connect_game_signals() -> void:
 
 func _on_floor_generated(columns: int, rows: int) -> void:
 	_stop_roll()
+	_quick_winner_token += 1
 	_confetti.stop()
 	_winner_screen.hide_now()
 	_clear_floor()
@@ -224,6 +229,12 @@ func _on_player_selected(player_id: int) -> void:
 
 
 func _on_duel_started(attacker_id: int, defender_id: int) -> void:
+	if GameManager.is_quick_duel:
+		# Podłoga (podświetlenia, baner) zostaje nietknięta; może być odpalony np. po końcu gry.
+		_quick_winner_token += 1
+		_winner_screen.hide_now()
+		_confetti.stop()
+		return
 	# Podłogę przykrywa DuelScreen – podświetlenie widać tuż po jego zniknięciu.
 	_set_highlights({
 		attacker_id: Tile.HighlightStyle.ATTACKER,
@@ -292,9 +303,24 @@ func _on_game_over(winner_id: int) -> void:
 			_reveal_winner.bind(_floor_generation, winner_id))
 
 
+## Szybki pojedynek: ogłoszenie zwycięzcy + konfetti na kilka sekund, potem wraca podłoga.
+func _on_quick_duel_finished(winner_name: String, winner_color: Color, category_name: String) -> void:
+	_quick_winner_token += 1
+	var token := _quick_winner_token
+	await get_tree().create_timer(DuelScreen.FADE_DURATION).timeout
+	if token != _quick_winner_token:
+		return
+	_winner_screen.show_winner(winner_name, winner_color, "Szybki pojedynek  •  %s" % category_name)
+	_play_confetti_in(winner_color)
+	await get_tree().create_timer(QUICK_WINNER_DURATION).timeout
+	if token == _quick_winner_token:
+		_winner_screen.hide_now()
+		_confetti.stop()
+
+
 func _reveal_winner(generation: int, winner_id: int) -> void:
-	if generation != _floor_generation:
-		return # W międzyczasie wygenerowano nową podłogę.
+	if generation != _floor_generation or GameManager.phase != GameManager.Phase.GAME_OVER:
+		return # W międzyczasie wygenerowano nową podłogę (albo trwa szybki pojedynek).
 	var tiles := GameManager.players.size()
 	var few := tiles % 10 in [2, 3, 4] and tiles % 100 not in [12, 13, 14]
 	_winner_screen.show_winner(GameManager.get_player_name(winner_id),
@@ -315,8 +341,11 @@ func _create_confetti() -> Confetti:
 func _play_confetti(generation: int, winner_id: int) -> void:
 	if generation != _floor_generation:
 		return
-	# Kolor zwycięzcy pojawia się najczęściej, reszta to barwy akcentowe gry.
-	var winner_color := GameManager.get_player_color(winner_id)
+	_play_confetti_in(GameManager.get_player_color(winner_id))
+
+
+## Kolor zwycięzcy pojawia się najczęściej, reszta to barwy akcentowe gry.
+func _play_confetti_in(winner_color: Color) -> void:
 	var colors: Array[Color] = [winner_color, winner_color, winner_color.lightened(0.35),
 			ACCENT_COLOR, SUCCESS_COLOR, DANGER_COLOR, Color("118ab2"), Color.WHITE]
 	_confetti.play(size, colors)
