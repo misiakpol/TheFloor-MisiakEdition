@@ -752,6 +752,22 @@ size_flags_vertical = 3
 expand_mode = 1
 stretch_mode = 5
 
+[node name="AnswerVideoBox" type="AspectRatioContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 120)
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+ratio = 1.7778
+
+[node name="AnswerVideo" type="VideoStreamPlayer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn/AnswerVideoBox"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+volume_db = -80.0
+expand = true
+
 [node name="DuelControlColumn" type="VBoxContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView" unique_id=1114428000]
 layout_mode = 2
 size_flags_horizontal = 3

@@ -97,6 +97,10 @@ var _synced_player_count := GameManager.MIN_PLAYERS
 @onready var _answer_caption: Label = %AnswerCaption
 @onready var _answer_label: Label = %AnswerLabel
 @onready var _answer_preview: TextureRect = %AnswerPreview
+## Podgląd pytania-wideo (wyciszony – dźwięk gra tylko na TV).
+@onready var _answer_video_box: AspectRatioContainer = %AnswerVideoBox
+@onready var _answer_video: VideoStreamPlayer = %AnswerVideo
+var _answer_video_started_ms := 0
 @onready var _start_duel_button: Button = %StartDuelButton
 @onready var _pause_button: Button = %PauseButton
 @onready var _correct_button: Button = %CorrectButton
@@ -167,6 +171,17 @@ func _connect_ui_signals() -> void:
 
 
 func _connect_manager_signals() -> void:
+	# Podgląd wideo: pętla (gdy brak VideoStreamPlayer.loop) i stop po pojedynku.
+	_answer_video.finished.connect(func() -> void:
+		if _answer_video.stream == null:
+			return
+		if Time.get_ticks_msec() - _answer_video_started_ms < 300:
+			_show_answer_video(null) # Uszkodzony plik – bez pętli błędów.
+			return
+		_answer_video.play()
+		_answer_video_started_ms = Time.get_ticks_msec()
+	)
+	GameManager.duel_ended.connect(_show_answer_video.bind(null))
 	GameManager.state_changed.connect(_refresh_ui)
 	GameManager.roster_changed.connect(_populate_player_list)
 	GameManager.log_message.connect(_append_log)
@@ -279,7 +294,11 @@ func _on_categories_load_failed(message: String) -> void:
 func _on_duel_image_changed(question: Dictionary, _previous_answer: String, _action: int) -> void:
 	_answer_label.text = question.get("answer", "?")
 	# Ta sama tekstura co na TV – CategoryManager zwraca ją z cache.
-	if question.get("kind") == CategoryManager.KIND_MUSIC:
+	_show_answer_video(null)
+	if question.get("kind") == CategoryManager.KIND_VIDEO:
+		_answer_caption.text = "POPRAWNA ODPOWIEDŹ (WIDEO)"
+		_show_answer_video(CategoryManager.load_video(question.get("path", "")))
+	elif question.get("kind") == CategoryManager.KIND_MUSIC:
 		_answer_caption.text = "POPRAWNA ODPOWIEDŹ (UTWÓR)"
 		_answer_preview.texture = CategoryManager.load_texture(
 				CategoryManager.get_background(GameManager.get_duel_category_key()))
@@ -288,6 +307,24 @@ func _on_duel_image_changed(question: Dictionary, _previous_answer: String, _act
 		_answer_preview.texture = CategoryManager.load_texture(question.get("path", ""))
 
 #endregion
+
+
+## Wyciszony podgląd wideo w pętli zamiast obrazka; null = powrót do podglądu obrazka.
+func _show_answer_video(video: VideoStream) -> void:
+	_answer_video.stop()
+	_answer_video.stream = video
+	_answer_video_box.visible = video != null
+	_answer_preview.visible = video == null
+	if video == null:
+		return
+	if "loop" in _answer_video:
+		_answer_video.set("loop", true)
+	_answer_video.play()
+	_answer_video_started_ms = Time.get_ticks_msec()
+	await get_tree().process_frame
+	var texture := _answer_video.get_video_texture()
+	if texture and texture.get_height() > 0:
+		_answer_video_box.ratio = float(texture.get_width()) / texture.get_height()
 
 
 #region Odświeżanie widoku – rozgrywka
@@ -608,6 +645,7 @@ func _refresh_duel_view() -> void:
 		_answer_caption.text = "POPRAWNA ODPOWIEDŹ"
 		_answer_label.text = "Naciśnij START, gdy gracze są gotowi"
 		_answer_preview.texture = null
+		_show_answer_video(null)
 	elif state == GameManager.DuelState.COUNTDOWN:
 		_answer_label.text = "Odliczanie..."
 

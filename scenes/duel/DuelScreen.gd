@@ -42,6 +42,14 @@ var _intro_tween: Tween
 @onready var _duel_caption: Label = %DuelCaption
 @onready var _category_label: Label = %CategoryLabel
 @onready var _image_rect: TextureRect = %ImageRect
+## Pytanie-wideo: AspectRatioContainer (proporcje filmu) + VideoStreamPlayer na szynie Questions.
+@onready var _video_box: AspectRatioContainer = %VideoBox
+@onready var _video_rect: VideoStreamPlayer = %VideoRect
+## Film, który "kończy się" szybciej niż to od startu, uznajemy za uszkodzony (bez pętli błędów).
+const BROKEN_VIDEO_MS := 300
+## Ile razy (co 0.1 s) czekamy na pierwszą klatkę, zanim uznamy plik za uszkodzony.
+const VIDEO_FIRST_FRAME_CHECKS := 10
+var _video_started_ms := 0
 @onready var _placeholder_label: Label = %PlaceholderLabel
 @onready var _countdown_label: Label = %CountdownLabel
 @onready var _penalty_box: Control = %PenaltyBox
@@ -64,6 +72,7 @@ func _ready() -> void:
 		control.resized.connect(func() -> void: control.pivot_offset = control.size * 0.5)
 
 	GameManager.duel_started.connect(_on_duel_started)
+	_video_rect.finished.connect(_on_video_finished)
 	GameManager.duel_countdown_changed.connect(_on_countdown_changed)
 	GameManager.duel_image_changed.connect(_on_duel_image_changed)
 	GameManager.duel_turn_changed.connect(_set_active_side)
@@ -89,6 +98,7 @@ func _on_duel_started(attacker_id: int, defender_id: int) -> void:
 
 	_kill(_image_tween)
 	_kill(_feedback_tween)
+	_stop_video()
 	_image_rect.texture = null
 	_feedback_label.modulate.a = 0.0
 	_pause_label.hide()
@@ -146,25 +156,35 @@ func _on_duel_image_changed(image: Dictionary, previous_answer: String, action: 
 	_hide_penalty(false)
 
 	var texture: Texture2D
-	if image.get("kind") == CategoryManager.KIND_MUSIC:
-		# Pytanie = utwór; na środku stały obrazek tła kategorii.
-		texture = CategoryManager.load_texture(CategoryManager.get_background(GameManager.get_duel_category_key()))
-		var stream := CategoryManager.load_audio(image.get("path", ""))
-		AudioManager.play_question(stream)
-		_placeholder_label.text = "JAKI TO UTWÓR?" if stream != null else "Nie udało się wczytać utworu"
+	var media: Control = _image_rect # To, co "wskakuje" na ekran.
+	if image.get("kind") == CategoryManager.KIND_VIDEO:
+		# Pytanie = wideo w pętli; muzyka tła wyciszona na czas filmu.
+		var video := CategoryManager.load_video(image.get("path", ""))
+		_play_video(video)
+		media = _video_box
+		_placeholder_label.text = "Nie udało się wczytać wideo"
+		_placeholder_label.visible = video == null
 	else:
-		texture = CategoryManager.load_texture(image.get("path", ""))
-		_placeholder_label.text = "Nie udało się wczytać zdjęcia"
+		_stop_video()
+		if image.get("kind") == CategoryManager.KIND_MUSIC:
+			# Pytanie = utwór; na środku stały obrazek tła kategorii.
+			texture = CategoryManager.load_texture(CategoryManager.get_background(GameManager.get_duel_category_key()))
+			var stream := CategoryManager.load_audio(image.get("path", ""))
+			AudioManager.play_question(stream)
+			_placeholder_label.text = "JAKI TO UTWÓR?" if stream != null else "Nie udało się wczytać utworu"
+		else:
+			texture = CategoryManager.load_texture(image.get("path", ""))
+			_placeholder_label.text = "Nie udało się wczytać zdjęcia"
+		_placeholder_label.visible = texture == null
 	_image_rect.texture = texture
-	_placeholder_label.visible = texture == null
 
-	# Szybkie "wskoczenie" nowego zdjęcia.
+	# Szybkie "wskoczenie" nowego zdjęcia / wideo.
 	_kill(_image_tween)
-	_image_rect.scale = Vector2.ONE * 0.94
-	_image_rect.modulate.a = 0.0
+	media.scale = Vector2.ONE * 0.94
+	media.modulate.a = 0.0
 	_image_tween = create_tween().set_parallel().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	_image_tween.tween_property(_image_rect, "scale", Vector2.ONE, 0.18)
-	_image_tween.tween_property(_image_rect, "modulate:a", 1.0, 0.12)
+	_image_tween.tween_property(media, "scale", Vector2.ONE, 0.18)
+	_image_tween.tween_property(media, "modulate:a", 1.0, 0.12)
 
 	# Koniec odliczania ("0"): pierwsze zdjęcie + dźwięk startu.
 	if action == GameManager.DuelAction.START:
@@ -202,6 +222,9 @@ func _on_penalty_ticked(_side: int, penalty_left: int) -> void:
 
 func _on_duel_timeout(loser_side: int) -> void:
 	AudioManager.stop_question()
+	# Wideo zatrzymuje się na ostatniej klatce; wraca muzyka tła.
+	_video_rect.paused = true
+	AudioManager.set_music_ducked(false)
 	_countdown_label.hide()
 	_hide_penalty(true)
 	var winner_side := 1 - loser_side
@@ -219,6 +242,7 @@ func _on_duel_ended() -> void:
 	_kill(_intro_tween)
 	_final_intro.hide()
 	AudioManager.stop_question()
+	_stop_video()
 	AudioManager.play_music(AudioManager.MUSIC_MAIN)
 	_fade_out()
 
@@ -229,6 +253,8 @@ func _on_state_changed() -> void:
 	var paused := GameManager.duel_state == GameManager.DuelState.PAUSED
 	_pause_label.visible = paused
 	AudioManager.set_question_paused(paused)
+	if _video_box.visible and GameManager.duel_state != GameManager.DuelState.TIMEOUT:
+		_video_rect.paused = paused
 	_update_times(GameManager.duel_times) # Kolor zegara po zakończeniu kary.
 
 #endregion
@@ -328,15 +354,77 @@ func _hide_penalty(instant: bool) -> void:
 	if instant:
 		_kill(_dim_tween)
 		_image_rect.self_modulate = Color.WHITE
+		_video_rect.self_modulate = Color.WHITE
 	else:
 		_tween_image_dim(Color.WHITE)
+
+
+## Wideo gra w pętli, dopóki pytanie się nie zmieni; muzyka tła jest w tym czasie wyciszona.
+func _play_video(video: VideoStream) -> void:
+	_video_rect.stop()
+	_video_rect.stream = video
+	_video_rect.paused = false
+	_image_rect.hide()
+	_video_box.visible = video != null
+	if video == null:
+		return
+	if "loop" in _video_rect:
+		_video_rect.set("loop", true)
+	_video_rect.play()
+	_video_started_ms = Time.get_ticks_msec()
+	AudioManager.set_music_ducked(true)
+	_fit_video_aspect()
+
+
+func _stop_video() -> void:
+	if not _video_box.visible and _video_rect.stream == null:
+		return
+	_video_rect.stop()
+	_video_rect.stream = null
+	_video_box.hide()
+	_image_rect.show()
+	AudioManager.set_music_ducked(false)
+
+
+func _show_broken_video() -> void:
+	_stop_video()
+	_placeholder_label.text = "Nie udało się odtworzyć wideo"
+	_placeholder_label.show()
+
+
+## Proporcje kontenera = proporcje filmu (rozmiar tekstury znany po zdekodowaniu klatki).
+## Brak klatki po BROKEN_VIDEO_MS = plik uszkodzony albo nie Ogg Theora (is_playing() wtedy kłamie).
+func _fit_video_aspect() -> void:
+	var stream := _video_rect.stream
+	for attempt in VIDEO_FIRST_FRAME_CHECKS: # Do ~1 s na pierwszą klatkę (wolniejsze komputery).
+		await get_tree().create_timer(0.1).timeout
+		if _video_rect.stream != stream or not _video_box.visible:
+			return # W międzyczasie zmieniło się pytanie.
+		var texture := _video_rect.get_video_texture()
+		if texture != null and texture.get_height() > 0:
+			_video_box.ratio = float(texture.get_width()) / texture.get_height()
+			return
+	_show_broken_video()
+
+
+## Zapętlenie dla wersji Godota bez właściwości VideoStreamPlayer.loop.
+## "Koniec" tuż po starcie = plik uszkodzony / nie-Theora – nie restartujemy w kółko.
+func _on_video_finished() -> void:
+	if not _video_box.visible or _video_rect.stream == null:
+		return
+	if Time.get_ticks_msec() - _video_started_ms < BROKEN_VIDEO_MS:
+		_show_broken_video()
+		return
+	_video_rect.play()
+	_video_started_ms = Time.get_ticks_msec()
 
 
 ## Przyciemnianie przez self_modulate – modulate:a jest zajęte przez "wskoczenie" zdjęcia.
 func _tween_image_dim(target: Color) -> void:
 	_kill(_dim_tween)
-	_dim_tween = create_tween()
+	_dim_tween = create_tween().set_parallel()
 	_dim_tween.tween_property(_image_rect, "self_modulate", target, 0.2)
+	_dim_tween.tween_property(_video_rect, "self_modulate", target, 0.2)
 
 
 ## Duża liczba "uderza" w ekran: skala 1.5 -> 1 i pojawienie się.

@@ -36,14 +36,20 @@ const FINAL_CATEGORIES_DIR := "kategorie final"
 const FINAL_PREFIX := "final:"
 const IMAGE_EXTENSIONS: PackedStringArray = ["png", "jpg", "jpeg", "webp", "bmp", "tga"]
 const AUDIO_EXTENSIONS: PackedStringArray = ["ogg"]
+## Godot 4 odtwarza natywnie tylko Ogg Theora. Inne formaty wideo trzeba skonwertować do .ogv.
+const VIDEO_EXTENSIONS: PackedStringArray = ["ogv"]
+const UNSUPPORTED_VIDEO_EXTENSIONS: PackedStringArray = ["mp4", "mkv", "webm", "mov", "avi", "m4v", "wmv"]
 const KIND_IMAGE := "image"
 const KIND_MUSIC := "music"
+## Pytanie-wideo (w kategorii obrazkowej, także mieszanej ze zdjęciami). Kategoria ma wtedy kind KIND_IMAGE.
+const KIND_VIDEO := "video"
 ## Większe zdjęcia są zmniejszane przy wczytaniu (pamięć + brak przycięć na TV).
 const MAX_IMAGE_SIZE := Vector2i(1920, 1080)
 
 ## Wczytane kategorie, posortowane po nazwie. Każdy element:
 ## [code]{ "name", "path", "kind": KIND_IMAGE|KIND_MUSIC, "background": String, "questions": Array[Dictionary] }[/code],
-## a każde pytanie: [code]{ "answer": String, "path": String, "kind": KIND_IMAGE|KIND_MUSIC }[/code].
+## a każde pytanie: [code]{ "answer": String, "path": String, "kind": KIND_IMAGE|KIND_MUSIC|KIND_VIDEO }[/code].
+## Kategoria obrazkowa może mieszać zdjęcia i wideo (.ogv) – wideo gra w pętli na ekranie pojedynku.
 ## [code]background[/code] – ścieżka obrazka tła kategorii muzycznej (lub pusta).
 var categories: Array[Dictionary] = []
 ## Kategorie finałowe (te same pola; [code]name[/code] = klucz z [constant FINAL_PREFIX]).
@@ -181,8 +187,15 @@ func get_questions(category_name: String) -> Array[Dictionary]:
 
 ## Opis liczby pytań do UI, np. "12 zdj." albo "40 utw.".
 func describe_question_count(category_name: String) -> String:
-	var count := get_questions(category_name).size()
-	return "%d %s" % [count, "utw." if is_music_category(category_name) else "zdj."]
+	var questions := get_questions(category_name)
+	if is_music_category(category_name):
+		return "%d utw." % questions.size()
+	var videos := questions.filter(func(question: Dictionary) -> bool: return question["kind"] == KIND_VIDEO).size()
+	if videos == 0:
+		return "%d zdj." % questions.size()
+	if videos == questions.size():
+		return "%d wid." % videos
+	return "%d zdj. + %d wid." % [questions.size() - videos, videos]
 
 
 ## Zaczyna wczytywać plik pytania (zdjęcie lub utwór) w wątku roboczym, żeby późniejsze
@@ -190,6 +203,8 @@ func describe_question_count(category_name: String) -> String:
 func preload_file(path: String) -> void:
 	if path.is_empty() or _resource_cache.has(path) or _preload_tasks.has(path):
 		return
+	if path.get_extension().to_lower() in VIDEO_EXTENSIONS:
+		return # Wideo jest strumieniowane z dysku – nie ma czego wczytywać z wyprzedzeniem.
 	_preload_tasks[path] = WorkerThreadPool.add_task(
 			_load_in_background.bind(path), false, "Preload " + path.get_file())
 
@@ -211,6 +226,16 @@ func load_texture(path: String) -> Texture2D:
 
 
 ## Zwraca utwór .ogg wczytany z dysku (zapętlony – gra, dopóki ktoś nie odgadnie).
+## Strumień wideo (.ogv) czytany prosto z dysku – bez importu Godota.
+func load_video(path: String) -> VideoStream:
+	if path.is_empty() or not FileAccess.file_exists(path):
+		push_warning("[CategoryManager] Brak pliku wideo: %s" % path)
+		return null
+	var stream := VideoStreamTheora.new()
+	stream.file = path
+	return stream
+
+
 func load_audio(path: String) -> AudioStream:
 	if path.is_empty():
 		return null
@@ -262,6 +287,7 @@ func _scan_category(path: String, category_name: String) -> Dictionary:
 
 	var images: Array[Dictionary] = []
 	var tracks: Array[Dictionary] = []
+	var videos: Array[Dictionary] = []
 	for file_name: String in file_names:
 		var extension := file_name.get_extension().to_lower()
 		var answer := file_name.get_basename().strip_edges()
@@ -271,9 +297,17 @@ func _scan_category(path: String, category_name: String) -> Dictionary:
 			images.append({ "answer": answer, "path": path.path_join(file_name), "kind": KIND_IMAGE })
 		elif extension in AUDIO_EXTENSIONS:
 			tracks.append({ "answer": answer, "path": path.path_join(file_name), "kind": KIND_MUSIC })
+		elif extension in VIDEO_EXTENSIONS:
+			videos.append({ "answer": answer, "path": path.path_join(file_name), "kind": KIND_VIDEO })
+		elif extension in UNSUPPORTED_VIDEO_EXTENSIONS:
+			push_warning("[CategoryManager] %s: format .%s nie jest obsługiwany – skonwertuj do .ogv (Ogg Theora)." % [
+				path.path_join(file_name), extension,
+			])
 
 	# Jakikolwiek plik .ogg = kategoria muzyczna; obrazek (maks. jeden) to wtedy tylko tło.
 	if not tracks.is_empty():
+		if not videos.is_empty():
+			push_warning("[CategoryManager] Kategoria muzyczna \"%s\" zawiera wideo – pomijam je (pytaniami są utwory)." % category_name)
 		if images.size() > 1:
 			push_warning("[CategoryManager] Kategoria muzyczna \"%s\" ma %d obrazków – tłem będzie %s." % [
 				category_name, images.size(), images[0]["path"].get_file(),
@@ -286,9 +320,14 @@ func _scan_category(path: String, category_name: String) -> Dictionary:
 			"questions": tracks,
 		}
 
-	if images.is_empty():
-		push_warning("[CategoryManager] Kategoria \"%s\" nie zawiera zdjęć ani utworów." % category_name)
-	return { "name": category_name, "path": path, "kind": KIND_IMAGE, "background": "", "questions": images }
+	# Kategoria obrazkowa: zdjęcia i wideo razem (posortowane po nazwie pliku).
+	var questions: Array[Dictionary] = []
+	questions.assign(images + videos)
+	questions.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return _natural_less(a["path"].get_file(), b["path"].get_file()))
+	if questions.is_empty():
+		push_warning("[CategoryManager] Kategoria \"%s\" nie zawiera zdjęć, wideo ani utworów." % category_name)
+	return { "name": category_name, "path": path, "kind": KIND_IMAGE, "background": "", "questions": questions }
 
 
 func _take_preloaded(path: String) -> Variant:

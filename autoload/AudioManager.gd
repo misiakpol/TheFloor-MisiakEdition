@@ -44,6 +44,10 @@ var _next_sfx_player := 0
 var _win_music_timer: Timer
 ## Odtwarzacz utworów-pytań (kategorie muzyczne) – niezależny od muzyki tła.
 var _question_player: AudioStreamPlayer
+## Efekt na szynie Music do płynnego wyciszania muzyki tła ([method set_music_ducked]).
+var _music_duck: AudioEffectAmplify
+var _duck_tween: Tween
+const DUCKED_DB := -60.0
 
 
 func _ready() -> void:
@@ -136,6 +140,15 @@ func play_question(stream: AudioStream) -> void:
 		_question_player.play()
 
 
+## Płynnie wycisza (true) albo przywraca (false) muzykę tła – np. gdy na ekranie gra wideo
+## z własnym dźwiękiem. Muzyka gra dalej "pod spodem", więc po powrocie nie startuje od nowa.
+func set_music_ducked(ducked: bool, fade_duration := 0.4) -> void:
+	if _duck_tween and _duck_tween.is_valid():
+		_duck_tween.kill()
+	_duck_tween = create_tween()
+	_duck_tween.tween_property(_music_duck, "volume_db", DUCKED_DB if ducked else 0.0, fade_duration)
+
+
 func stop_question() -> void:
 	_question_player.stop()
 	_question_player.stream = null
@@ -207,6 +220,13 @@ func _setup_buses() -> void:
 	_ensure_bus(MUSIC_BUS, MUSIC_BUS_VOLUME_DB)
 	_ensure_bus(SFX_BUS, SFX_BUS_VOLUME_DB)
 	_ensure_bus(QUESTION_BUS, QUESTION_BUS_VOLUME_DB)
+
+	# Wyciszanie muzyki tła (np. na czas pytania-wideo) przez efekt Amplify na szynie Music –
+	# niezależne od suwaka głośności i od crossfade'u odtwarzaczy.
+	var music_index := AudioServer.get_bus_index(MUSIC_BUS)
+	_music_duck = AudioEffectAmplify.new()
+	_music_duck.volume_db = 0.0
+	AudioServer.add_bus_effect(music_index, _music_duck)
 
 
 ## Tworzy szynę (jeśli jej nie ma, np. brak default_bus_layout.tres) i podpina ją do Master.
