@@ -66,7 +66,7 @@ audio/music/win/*.ogg           <- muzyka zwycięstwa, ładowana w locie (.gdign
 ```
 
 - Katalog danych: w edytorze `res://` zglobalizowany, w eksporcie **katalog obok .exe** (`CategoryManager.get_data_dir()`). Te foldery trzeba kopiować obok .exe.
-- Obrazki: png/jpg/jpeg/webp/bmp/tga, zmniejszane do 1920×1080, z mipmapami. Audio pytań: tylko `.ogg` (zapętlone, osobna szyna `Questions`).
+- Obrazki: png/jpg/jpeg/webp/bmp/tga, przy wczytaniu dopasowywane do pola zdjęcia na ekranie (`CategoryManager.image_target_size`, ustawia `Main._update_image_target` z rozmiaru okna; w górę Lanczos, maks. ×4), z mipmapami. W pamięci max. 8 tekstur (`MAX_CACHED_TEXTURES`). Audio pytań: tylko `.ogg` (zapętlone, osobna szyna `Questions`).
 - **Wideo**: tylko `.ogv` (Ogg Theora – jedyny format natywny Godota 4; mp4/mkv/webm/mov/avi dają ostrzeżenie przy skanowaniu). Pytanie ma `kind = KIND_VIDEO`, kategoria pozostaje `KIND_IMAGE` (zdjęcia i wideo mieszają się w jednej talii; opis np. „12 zdj. + 3 wid.”). W kategorii muzycznej wideo jest pomijane. Wczytywanie: `CategoryManager.load_video()` → `VideoStreamTheora` z `file` = ścieżka absolutna (bez importu, bez preloadu). Konwersja: `ffmpeg -i in.mp4 -c:v libtheora -q:v 7 -c:a libvorbis -q:a 5 out.ogv`.
 - **Klucze vs nazwy**: klucz kategorii = pełna nazwa folderu w formacie proper (`TextUtils.to_proper`); kategorie finałowe mają klucz `"final:" + nazwa`. Do ekranu gry używaj `CategoryManager.get_display_name()` / `GameManager.get_player_category_display()` / `get_duel_category_name()`; do konsoli i statystyk `get_admin_name()`; do zapytań (pytania, tło, czy muzyczna) zawsze **klucza** (`get_duel_category_key()`).
 - Admin: „Skanuj foldery” = `CategoryManager.reload()` (nie w trakcie pojedynku).
@@ -87,6 +87,9 @@ audio/music/win/*.ogg           <- muzyka zwycięstwa, ładowana w locie (.gdign
 - Konfiguracja: lista graczy (imiona → `to_proper`, Enter dodaje i zostawia focus – `keep_editing_on_text_submit` + `edit()` deferred), liczba graczy (podąża za listą), kategorie zwykłe i finałowe (zielona/szara kropka = nowa/zagrana; „Odnów zagrane”, „Odnów pulę”), wybór kategorii rundy 3, czas na odpowiedź, głośności, „Zapisz ustawienia”.
 - Rozgrywka: losowanie, wybór przeciwnika, w fazie DUEL panel sterowania. Skróty (Button.shortcut): **Enter/Spacja** = START / poprawna, **P** = pas. Przyciski pojedynku mają `focus_mode = 0`.
 - Statystyki: ranking (`Tree`) wg tytuły > wygrane pojedynki > % > pola > poprawne; ciekawostki sesji; reset wymaga dwóch kliknięć. Klik w nagłówek (`column_title_clicked`) sortuje tylko widok w konsoli (`_sort_column`, `_sort_descending`, klucz w `RANKING_COLUMNS`): pierwszy klik od największej (`#` i `Gracz` rosnąco), kolejny odwraca; „Pojedynki W/P” wg wygranych; „-” zawsze na końcu; remisy i kolory podium wg rankingu.
+
+## Rozdzielczość
+Baza 1920×1080, stretch `canvas_items` + `expand`: tekst i kafelki są rysowane natywnie i ostre także w 4K; ostrość zdjęć zależy od plików źródłowych. Gra działa w rozdzielczości ustawionej w Windows, a przy starcie loguje ją w konsoli („Ekran gry: …”). Uwaga: `Viewport.get_texture().get_size()` zawyża wynik – prawdziwy rozmiar pokazuje zapisany PNG.
 
 ## Konwencje i pułapki
 

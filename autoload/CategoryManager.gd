@@ -43,8 +43,13 @@ const KIND_IMAGE := "image"
 const KIND_MUSIC := "music"
 ## Pytanie-wideo (w kategorii obrazkowej, także mieszanej ze zdjęciami). Kategoria ma wtedy kind KIND_IMAGE.
 const KIND_VIDEO := "video"
-## Większe zdjęcia są zmniejszane przy wczytaniu (pamięć + brak przycięć na TV).
-const MAX_IMAGE_SIZE := Vector2i(1920, 1080)
+## Rozmiar pola zdjęcia na ekranie gry w pikselach (ustawia Main wg okna). Zdjęcia są do niego
+## dopasowywane przy wczytaniu: ostre w 4K, a na mniejszym ekranie nie marnują pamięci.
+const DEFAULT_IMAGE_TARGET := Vector2i(922, 814)
+## Małych zdjęć nie powiększamy bardziej niż tyle razy (dalej i tak nie przybywa szczegółów).
+const MAX_IMAGE_UPSCALE := 4.0
+## Limit zdjęć w pamięci – w 4K jedno to ok. 16 MB, a pojedynek potrafi ich pokazać dziesiątki.
+const MAX_CACHED_TEXTURES := 8
 
 ## Wczytane kategorie, posortowane po nazwie. Każdy element:
 ## [code]{ "name", "path", "kind": KIND_IMAGE|KIND_MUSIC, "background": String, "questions": Array[Dictionary] }[/code],
@@ -57,6 +62,9 @@ var final_categories: Array[Dictionary] = []
 
 ## Cache zasobów: absolutna ścieżka -> Texture2D / AudioStream.
 var _resource_cache: Dictionary = {}
+## Ścieżki tekstur w cache od najstarszej ([constant MAX_CACHED_TEXTURES]).
+var _texture_order: PackedStringArray = []
+var image_target_size := DEFAULT_IMAGE_TARGET
 ## Pliki wczytywane w tle (kolejne pytanie pojedynku): ścieżka -> id zadania WorkerThreadPool.
 var _preload_tasks: Dictionary = {}
 ## Wyniki wczytywania w tle: ścieżka -> Image / AudioStream (dostęp chroniony mutexem).
@@ -222,6 +230,10 @@ func load_texture(path: String) -> Texture2D:
 		return null
 	var texture := ImageTexture.create_from_image(image)
 	_resource_cache[path] = texture
+	_texture_order.append(path)
+	while _texture_order.size() > MAX_CACHED_TEXTURES:
+		_resource_cache.erase(_texture_order[0])
+		_texture_order.remove_at(0)
 	return texture
 
 
@@ -255,6 +267,7 @@ func clear_cache() -> void:
 	_preload_tasks.clear()
 	_preloaded.clear()
 	_resource_cache.clear()
+	_texture_order.clear()
 
 
 ## Skanuje podfoldery [param root]; nazwy w formacie "proper" (Dworce Kolejowe),
@@ -375,10 +388,15 @@ func _decode_image(path: String) -> Image:
 		push_warning("[CategoryManager] Nie udało się zdekodować obrazka: %s" % path)
 		return null
 
-	var factor := minf(float(MAX_IMAGE_SIZE.x) / image.get_width(), float(MAX_IMAGE_SIZE.y) / image.get_height())
-	if factor < 1.0:
-		image.resize(maxi(1, roundi(image.get_width() * factor)),
-				maxi(1, roundi(image.get_height() * factor)), Image.INTERPOLATE_CUBIC)
+	# Dopasowanie do pola na ekranie. Powiększanie Lanczosem wygląda dużo lepiej niż
+	# rozciąganie przez GPU, które przy małych zdjęciach daje widoczne "schodki".
+	var target := image_target_size
+	var factor := minf(float(target.x) / image.get_width(), float(target.y) / image.get_height())
+	factor = minf(factor, MAX_IMAGE_UPSCALE)
+	if not is_equal_approx(factor, 1.0):
+		image.convert(Image.FORMAT_RGBA8)
+		image.resize(maxi(1, roundi(image.get_width() * factor)), maxi(1, roundi(image.get_height() * factor)),
+				Image.INTERPOLATE_LANCZOS if factor > 1.0 else Image.INTERPOLATE_CUBIC)
 
 	# Mipmapy = gładkie skalowanie (np. mały podgląd w konsoli admina).
 	image.generate_mipmaps()

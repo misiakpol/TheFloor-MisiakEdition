@@ -26,6 +26,8 @@ const WINNER_REVEAL_DELAY := 1.5 ## Pauza po zapełnieniu podłogi, zanim pojawi
 const CAPTURE_EDGE_WIDTH := 36.0 ## Jasne czoło fali (piksele) – patrz radial_capture.gdshader.
 const ROLL_HOPS := 18 ## Liczba przeskoków podświetlenia w ruletce.
 const ROLL_LANDING_PAUSE := 0.3 ## Ostatni przeskok tyle przed ogłoszeniem wyniku (pauza przed "beep").
+## Udział pola zdjęcia w oknie (DuelScreen przy 16:9: 920 × 814 z 1920 × 1080).
+const IMAGE_AREA_RATIO := Vector2(0.48, 0.754)
 const MAX_TILE_ASPECT := 1.6 ## Maks. stosunek szerokość/wysokość kafelka.
 const ACCENT_COLOR := Color("ffd166")
 const DANGER_COLOR := Color("ef476f")
@@ -85,11 +87,22 @@ func _ready() -> void:
 	_setup_windows()
 	_connect_game_signals()
 	resized.connect(_fit_tiles)
+	resized.connect(_update_image_target)
+	_update_image_target()
+	var game_screen_index := get_window().current_screen
+	var screen_size := DisplayServer.screen_get_size(game_screen_index)
+	GameManager.log_message.emit("Ekran gry: monitor %d, %d × %d px." % [game_screen_index, screen_size.x, screen_size.y])
 	_show_banner("Czekamy na wygenerowanie podłogi...", Color.WHITE)
 	AudioManager.play_music(AudioManager.MUSIC_MAIN)
 
 
 #region Okna / monitory
+
+## Rozmiar pola zdjęcia w pikselach ekranu – do niego CategoryManager dopasowuje zdjęcia.
+func _update_image_target() -> void:
+	var window_size := Vector2(get_window().size)
+	CategoryManager.image_target_size = Vector2i(window_size * IMAGE_AREA_RATIO)
+
 
 func _setup_windows() -> void:
 	var screen_count := DisplayServer.get_screen_count()
