@@ -5,3 +5,5 @@ export/
 TEST KAT/
 kategorie/
 kategorie final/
+*.exe
+*.pck

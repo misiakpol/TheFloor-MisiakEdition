@@ -282,13 +282,13 @@ placeholder_text = "Imię gracza + Enter"
 max_length = 32
 keep_editing_on_text_submit = true
 
-[node name="PlayerCategoryOption" type="OptionButton" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn/PlayerForm" unique_id=2133422260]
+[node name="PlayerCategoryOption" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn/PlayerForm" unique_id=2133422260]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-tooltip_text = "Kategoria gracza (podfolder w kategorie/)"
+tooltip_text = "Kliknij, aby wybrać kategorię gracza."
 clip_text = true
-fit_to_longest_item = false
+alignment = 0
 
 [node name="AddPlayerButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn/PlayerForm" unique_id=27256664]
 unique_name_in_owner = true
@@ -455,13 +455,13 @@ theme_override_constants/separation = 8
 layout_mode = 2
 text = "Kategoria rundy rozstrzygającej"
 
-[node name="FinalCategoryOption" type="OptionButton" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/FinalPickRow" unique_id=1736761469]
+[node name="FinalCategoryOption" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/FinalPickRow" unique_id=1736761469]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-tooltip_text = "Domyślnie losowa z folderu kategorie final/. Można wybrać ręcznie (także zwykłą kategorię)."
+tooltip_text = "Kliknij, aby wybrać. Domyślnie losowa z folderu kategorie final/, można też zwykłą kategorię."
 clip_text = true
-fit_to_longest_item = false
+alignment = 0
 
 [node name="ResetFinalPoolButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/FinalPickRow"]
 unique_name_in_owner = true
@@ -911,13 +911,13 @@ theme_override_constants/separation = 10
 layout_mode = 2
 text = "Kategoria"
 
-[node name="QuickCategoryOption" type="OptionButton" parent="Root/Margin/VBox/Tabs/Szybki/QuickCategoryRow"]
+[node name="QuickCategoryOption" type="Button" parent="Root/Margin/VBox/Tabs/Szybki/QuickCategoryRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 size_flags_horizontal = 3
 clip_text = true
-fit_to_longest_item = false
+alignment = 0
 
 [node name="QuickStartButton" type="Button" parent="Root/Margin/VBox/Tabs/Szybki"]
 unique_name_in_owner = true

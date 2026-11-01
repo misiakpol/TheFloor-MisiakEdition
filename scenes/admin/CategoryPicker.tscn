@@ -1,0 +1,107 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scenes/admin/CategoryPicker.gd" id="1_picker"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_root"]
+bg_color = Color(0.06, 0.06, 0.1, 1)
+
+[node name="CategoryPicker" type="Window"]
+title = "Wybierz kategorię"
+size = Vector2i(1020, 680)
+visible = false
+transient = true
+exclusive = true
+min_size = Vector2i(680, 420)
+script = ExtResource("1_picker")
+
+[node name="Root" type="PanelContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBox_root")
+
+[node name="Margin" type="MarginContainer" parent="Root"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 14
+
+[node name="VBox" type="VBoxContainer" parent="Root/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="SearchEdit" type="LineEdit" parent="Root/Margin/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+placeholder_text = "Szukaj kategorii (opcjonalnie)…"
+keep_editing_on_text_submit = true
+clear_button_enabled = true
+
+[node name="FilterRow" type="HBoxContainer" parent="Root/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="FreshCheck" type="CheckBox" parent="Root/Margin/VBox/FilterRow"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+tooltip_text = "Ukrywa kategorie zagrane już w tej sesji."
+text = "Tylko nowe"
+
+[node name="FreeCheck" type="CheckBox" parent="Root/Margin/VBox/FilterRow"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+tooltip_text = "Ukrywa kategorie zajęte przez innych graczy z listy (także warianty o tej samej nazwie)."
+text = "Tylko wolne"
+
+[node name="TypeOption" type="OptionButton" parent="Root/Margin/VBox/FilterRow"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+
+[node name="CountLabel" type="Label" parent="Root/Margin/VBox/FilterRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
+text = "Widoczne: 0 / 0"
+horizontal_alignment = 2
+
+[node name="CategoryItems" type="ItemList" parent="Root/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+focus_mode = 0
+max_columns = 0
+same_column_width = true
+fixed_column_width = 310
+
+[node name="EmptyLabel" type="Label" parent="Root/Margin/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.62, 0.62, 1)
+text = "Żadna kategoria nie pasuje do wyszukiwania i filtrów."
+horizontal_alignment = 1
+
+[node name="BottomRow" type="HBoxContainer" parent="Root/Margin/VBox"]
+layout_mode = 2
+
+[node name="Legend" type="Label" parent="Root/Margin/VBox/BottomRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
+theme_override_font_sizes/font_size = 13
+text = "Zielona kropka = nowa, szara = już padła.  Strzałki: ruch po liście, Enter wybiera, Esc zamyka."
+
+[node name="CancelButton" type="Button" parent="Root/Margin/VBox/BottomRow"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+text = "Anuluj"

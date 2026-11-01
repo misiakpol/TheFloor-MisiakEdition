@@ -14,5 +14,14 @@ static func to_proper(text: String) -> String:
 	return result
 
 
+## Tekst do wyszukiwania: małe litery, bez polskich znaków ("Pociągi" -> "pociagi").
+static func to_search_key(text: String) -> String:
+	var result := text.to_lower()
+	for letter: String in POLISH_LETTERS:
+		result = result.replace(letter, POLISH_LETTERS[letter])
+	return result
+
+
+const POLISH_LETTERS := { "ą": "a", "ć": "c", "ę": "e", "ł": "l", "ń": "n", "ó": "o", "ś": "s", "ź": "z", "ż": "z" }
 ## "[" też – tagi wariantów kategorii: "marvel [aktorzy]" -> "Marvel [Aktorzy]".
 const WORD_SEPARATORS: PackedStringArray = [" ", "-", "(", "[", "\"", "/"]

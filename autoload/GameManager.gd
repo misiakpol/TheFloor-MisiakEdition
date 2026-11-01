@@ -1058,16 +1058,24 @@ func _is_display_name_taken(category: String, categories: Array[String]) -> bool
 func _is_valid_roster_category(category: String, ignored_index: int) -> bool:
 	if category.is_empty():
 		return true # Losowa – unikalność zapewni losowanie.
+	var conflict := get_roster_category_conflict(category, ignored_index)
+	if conflict < 0:
+		return true
+	_log("Kategoria \"%s\" koliduje z \"%s\" (%s) – na podłodze obie nazywałyby się \"%s\"." % [
+		category, roster[conflict]["category"], roster[conflict]["name"], CategoryManager.get_display_name(category),
+	])
+	return false
+
+
+## Indeks gracza z listy, którego kategoria ma tę samą nazwę wyświetlaną (-1 = wolna).
+func get_roster_category_conflict(category: String, ignored_index: int) -> int:
+	var display := CategoryManager.get_display_name(category).to_lower()
 	for i in roster.size():
 		var other: String = roster[i]["category"]
-		if i == ignored_index or other.is_empty():
-			continue
-		if CategoryManager.get_display_name(other).to_lower() == CategoryManager.get_display_name(category).to_lower():
-			_log("Kategoria \"%s\" koliduje z \"%s\" (%s) – na podłodze obie nazywałyby się \"%s\"." % [
-				category, other, roster[i]["name"], CategoryManager.get_display_name(category),
-			])
-			return false
-	return true
+		if i != ignored_index and not other.is_empty() \
+				and CategoryManager.get_display_name(other).to_lower() == display:
+			return i
+	return -1
 
 
 ## Złoty podział na kole barw = kolejne kolory są od siebie maksymalnie odległe.

@@ -11,6 +11,9 @@ extends Window
 ## Skróty w pojedynku: Enter / Spacja = START lub poprawna odpowiedź, P = pas.
 ## Dźwięki gra ekran TV (Main, DuelScreen) – konsola tylko wywołuje akcje.
 
+const CATEGORY_PICKER_SCENE: PackedScene = preload("res://scenes/admin/CategoryPicker.tscn")
+## Do czego trafi kategoria wybrana w okienku.
+enum PickerTarget { PLAYER, FINAL, QUICK }
 const SETUP_TAB := 0
 const GAME_TAB := 1
 const QUICK_TAB := 2
@@ -41,6 +44,12 @@ const INACTIVE_COLOR := Color(0.55, 0.57, 0.7)
 const DANGER_COLOR := Color("ef476f")
 const RANDOM_CATEGORY_TEXT := "(losowa kategoria)"
 
+## Kategorie wybrane w okienku (klucze; "" = losowa).
+var _player_category_key := ""
+var _quick_category_key := ""
+var _category_picker: CategoryPicker
+var _picker_target := PickerTarget.PLAYER
+
 ## Sortowanie tabeli rankingu (domyślnie wg miejsca w rankingu).
 var _sort_column := 0
 var _sort_descending := false
@@ -55,7 +64,7 @@ var _synced_player_count := GameManager.MIN_PLAYERS
 
 # Gracze
 @onready var _player_name_edit: LineEdit = %PlayerNameEdit
-@onready var _player_category_option: OptionButton = %PlayerCategoryOption
+@onready var _player_category_button: Button = %PlayerCategoryOption
 @onready var _add_player_button: Button = %AddPlayerButton
 @onready var _player_list: ItemList = %PlayerList
 @onready var _player_count_label: Label = %PlayerCountLabel
@@ -77,7 +86,7 @@ var _synced_player_count := GameManager.MIN_PLAYERS
 @onready var _played_icon: Texture2D = _make_dot_icon(PLAYED_DOT_COLOR)
 @onready var _final_title: Label = %FinalTitle
 @onready var _final_category_list: ItemList = %FinalCategoryList
-@onready var _final_category_option: OptionButton = %FinalCategoryOption
+@onready var _final_category_button: Button = %FinalCategoryOption
 @onready var _reset_final_pool_button: Button = %ResetFinalPoolButton
 
 # Statystyki
@@ -88,7 +97,7 @@ var _synced_player_count := GameManager.MIN_PLAYERS
 # Szybki pojedynek
 @onready var _quick_name_a: LineEdit = %QuickNameA
 @onready var _quick_name_b: LineEdit = %QuickNameB
-@onready var _quick_category_option: OptionButton = %QuickCategoryOption
+@onready var _quick_category_button: Button = %QuickCategoryOption
 @onready var _quick_start_button: Button = %QuickStartButton
 ## Szyna AudioManagera -> [suwak, etykieta z %].
 @onready var _duel_time_spin: SpinBox = %DuelTimeSpin
@@ -171,7 +180,12 @@ func _connect_ui_signals() -> void:
 	_player_count_spin.value_changed.connect(_on_player_count_changed)
 	_generate_button.pressed.connect(_on_generate_pressed)
 	_reload_button.pressed.connect(CategoryManager.reload)
-	_final_category_option.item_selected.connect(_on_final_category_selected)
+	_category_picker = CATEGORY_PICKER_SCENE.instantiate()
+	add_child(_category_picker)
+	_category_picker.picked.connect(_on_category_picked)
+	_player_category_button.pressed.connect(_open_category_picker.bind(PickerTarget.PLAYER))
+	_final_category_button.pressed.connect(_open_category_picker.bind(PickerTarget.FINAL))
+	_quick_category_button.pressed.connect(_open_category_picker.bind(PickerTarget.QUICK))
 	_reset_final_pool_button.pressed.connect(GameManager.reset_used_final_categories)
 	_reset_played_button.pressed.connect(GameManager.reset_played_categories)
 	_quick_start_button.pressed.connect(_on_quick_start_pressed)
@@ -230,6 +244,7 @@ func _connect_manager_signals() -> void:
 func _on_add_player_pressed() -> void:
 	if GameManager.add_roster_player(_player_name_edit.text, _get_selected_category()):
 		_player_name_edit.clear()
+		_select_category("") # Ta kategoria jest już zajęta – kolejny gracz wybiera od nowa.
 	_focus_player_name_edit.call_deferred()
 
 
@@ -492,10 +507,6 @@ func _refresh_player_buttons() -> void:
 
 ## Wypełnia listę kategorii (podgląd) i listę wyboru kategorii gracza.
 func _populate_category_views() -> void:
-	var previous_category := _get_selected_category()
-	_player_category_option.clear()
-	_player_category_option.add_item(RANDOM_CATEGORY_TEXT)
-	_player_category_option.set_item_metadata(0, "")
 	_category_list.clear()
 
 	for category in CategoryManager.categories:
@@ -504,10 +515,6 @@ func _populate_category_views() -> void:
 		var is_music: bool = category["kind"] == CategoryManager.KIND_MUSIC
 		var played := GameManager.is_category_played(category_name)
 		var played_text := PLAYED_SUFFIX if played else ""
-		_player_category_option.add_icon_item(_category_icon(category_name),
-				"%s (%s)%s" % [category_name, count_text, played_text])
-		_player_category_option.set_item_metadata(_player_category_option.item_count - 1, category_name)
-
 		var index := _category_list.add_item("%s%s — %s%s" % [
 			"[muz.] " if is_music else "", category_name, count_text, played_text,
 		], _category_icon(category_name))
@@ -521,7 +528,7 @@ func _populate_category_views() -> void:
 		elif is_music and category["background"].is_empty():
 			_category_list.set_item_tooltip(index, "Kategoria muzyczna bez obrazka tła (dodaj np. tlo.jpg).")
 
-	_select_category(previous_category)
+	_select_category(_player_category_key)
 	var played_count := CategoryManager.categories.filter(
 		func(category: Dictionary) -> bool: return GameManager.is_category_played(category["name"])
 	).size()
@@ -577,58 +584,143 @@ func _populate_final_categories() -> void:
 	_final_title.text = "Finałowe (runda 3): %d / %d w puli" % [unused_count, CategoryManager.final_categories.size()]
 	_reset_final_pool_button.disabled = GameManager.used_final_categories.is_empty()
 
-	_final_category_option.clear()
-	_final_category_option.add_item("(losowa z puli: %d niezużytych)" % unused_count)
-	_final_category_option.set_item_metadata(0, "")
-	for key in CategoryManager.get_final_category_keys():
-		_final_category_option.add_item("[finał] %s" % CategoryManager.get_admin_name(key))
-		_final_category_option.set_item_metadata(_final_category_option.item_count - 1, key)
-	for category_name in CategoryManager.get_category_names():
-		if not CategoryManager.get_questions(category_name).is_empty():
-			_final_category_option.add_item(category_name)
-			_final_category_option.set_item_metadata(_final_category_option.item_count - 1, category_name)
-
 	# Zachowaj wybór admina (np. po "Skanuj foldery"), jeśli kategoria nadal istnieje.
-	var selected_index := 0
-	for i in _final_category_option.item_count:
-		if str(_final_category_option.get_item_metadata(i)) == GameManager.final_category_override:
-			selected_index = i
-	_final_category_option.select(selected_index)
-	if selected_index == 0 and not GameManager.final_category_override.is_empty():
+	var override := GameManager.final_category_override
+	if not override.is_empty() and CategoryManager.get_questions(override).is_empty():
 		GameManager.set_final_category_override("")
+	_refresh_final_category_button()
 
 
-## Lista szybkiego pojedynku: najpierw zwykłe kategorie, potem finałowe (bez pustych).
-## Kropka i dopisek pokazują, co już padło w tej sesji.
-func _populate_quick_categories() -> void:
-	var previous_key := _get_quick_category()
-	_quick_category_option.clear()
+func _refresh_final_category_button() -> void:
+	var key := GameManager.final_category_override
+	if key.is_empty():
+		_set_category_button(_final_category_button, _final_random_text(), null)
+	else:
+		_set_category_button(_final_category_button, _category_label(key), _category_status_icon(key))
+
+
+func _final_random_text() -> String:
+	return "(losowa z puli: %d niezużytych)" % GameManager.get_unused_final_categories().size()
+
+
+func _set_category_button(button: Button, text: String, icon: Texture2D) -> void:
+	button.text = text
+	button.icon = icon
+
+
+## "Marvel [Aktorzy] (57 zdj.)  · zagrana" – opis kategorii na przycisku i w okienku wyboru.
+func _category_label(key: String) -> String:
+	return "%s%s (%s)%s" % [
+		"[finał] " if CategoryManager.is_final_category(key) else "",
+		CategoryManager.get_admin_name(key), CategoryManager.describe_question_count(key),
+		PLAYED_SUFFIX if _is_category_used(key) else "",
+	]
+
+
+## Zwykła: zagrana w sesji; finałowa: zużyta w sesji.
+func _is_category_used(key: String) -> bool:
+	if CategoryManager.is_final_category(key):
+		return GameManager.is_final_category_used(key)
+	return GameManager.is_category_played(key)
+
+
+func _category_status_icon(key: String) -> Texture2D:
+	return _played_icon if _is_category_used(key) else _fresh_icon
+
+
+func _picker_item(key: String) -> Dictionary:
+	var questions := CategoryManager.get_questions(key)
+	var has_video := questions.any(
+		func(question: Dictionary) -> bool: return question["kind"] == CategoryManager.KIND_VIDEO
+	)
+	var type: String = CategoryManager.KIND_VIDEO if has_video else CategoryManager.get_category(key)["kind"]
+	return {
+		"key": key,
+		"text": _category_label(key),
+		"icon": _category_status_icon(key),
+		"type": type,
+		"played": _is_category_used(key),
+	}
+
+
+func _regular_picker_items() -> Array[Dictionary]:
+	var items: Array[Dictionary] = []
 	for key in CategoryManager.get_category_names():
 		if not CategoryManager.get_questions(key).is_empty():
-			_add_quick_category(key, GameManager.is_category_played(key))
-	var final_keys := CategoryManager.get_final_category_keys()
-	if not final_keys.is_empty():
-		_quick_category_option.add_separator("Kategorie finałowe")
-	for key in final_keys:
-		_add_quick_category(key, GameManager.is_final_category_used(key))
+			items.append(_picker_item(key))
+	return items
 
-	for i in _quick_category_option.item_count:
-		if str(_quick_category_option.get_item_metadata(i)) == previous_key:
-			_quick_category_option.select(i)
+
+func _open_category_picker(target: PickerTarget) -> void:
+	_picker_target = target
+	var items: Array[Dictionary] = []
+	match target:
+		PickerTarget.PLAYER:
+			items.append({ "key": "", "text": RANDOM_CATEGORY_TEXT, "icon": null, "pinned": true })
+			items.append_array(_regular_picker_items())
+			for item in items:
+				_mark_if_taken(item)
+			_category_picker.open("Kategoria gracza", items, _player_category_key, true)
+		PickerTarget.FINAL:
+			items.append({ "key": "", "text": _final_random_text(), "icon": null, "pinned": true })
+			for key in CategoryManager.get_final_category_keys():
+				items.append(_picker_item(key))
+			items.append_array(_regular_picker_items())
+			_category_picker.open("Kategoria rundy rozstrzygającej", items, GameManager.final_category_override, false)
+		PickerTarget.QUICK:
+			items.append_array(_regular_picker_items())
+			for key in CategoryManager.get_final_category_keys():
+				items.append(_picker_item(key))
+			_category_picker.open("Kategoria szybkiego pojedynku", items, _quick_category_key, false)
+
+
+## Zajęta przez innego gracza z listy (także wariant o tej samej nazwie) – nie do wybrania.
+func _mark_if_taken(item: Dictionary) -> void:
+	if item["key"].is_empty():
+		return
+	var conflict := GameManager.get_roster_category_conflict(item["key"], _get_selected_player_index())
+	if conflict < 0:
+		return
+	var owner_name: String = GameManager.roster[conflict]["name"]
+	item["taken"] = true
+	item["text"] += "  · zajęta: %s" % owner_name
+	item["tooltip"] = "Gracz %s ma \"%s\" – na podłodze nazwy byłyby takie same." % [
+		owner_name, GameManager.roster[conflict]["category"],
+	]
+
+
+func _on_category_picked(key: String) -> void:
+	match _picker_target:
+		PickerTarget.PLAYER:
+			_select_category(key)
+			_focus_player_name_edit.call_deferred()
+		PickerTarget.FINAL:
+			GameManager.set_final_category_override(key)
+			_refresh_final_category_button()
+		PickerTarget.QUICK:
+			_quick_category_key = key
+			_populate_quick_categories()
+
+
+## Przycisk szybkiego pojedynku: domyślnie pierwsza kategoria z pytaniami.
+func _populate_quick_categories() -> void:
+	if CategoryManager.get_questions(_quick_category_key).is_empty():
+		_quick_category_key = ""
+		var items := _regular_picker_items()
+		if not items.is_empty():
+			_quick_category_key = items[0]["key"]
+		elif not CategoryManager.get_final_category_keys().is_empty():
+			_quick_category_key = CategoryManager.get_final_category_keys()[0]
+	if _quick_category_key.is_empty():
+		_set_category_button(_quick_category_button, "(brak kategorii)", null)
+	else:
+		_set_category_button(_quick_category_button, _category_label(_quick_category_key),
+				_category_status_icon(_quick_category_key))
 	_refresh_quick_start()
 
 
-func _add_quick_category(key: String, played: bool) -> void:
-	_quick_category_option.add_icon_item(_played_icon if played else _fresh_icon, "%s (%s)%s" % [
-		CategoryManager.get_admin_name(key), CategoryManager.describe_question_count(key),
-		PLAYED_SUFFIX if played else "",
-	])
-	_quick_category_option.set_item_metadata(_quick_category_option.item_count - 1, key)
-
-
 func _get_quick_category() -> String:
-	var index := _quick_category_option.selected
-	return "" if index < 0 else str(_quick_category_option.get_item_metadata(index))
+	return _quick_category_key
 
 
 func _refresh_quick_start() -> void:
@@ -639,28 +731,22 @@ func _on_quick_start_pressed() -> void:
 	GameManager.start_quick_duel(_quick_name_a.text, _quick_name_b.text, _get_quick_category())
 
 
-func _on_final_category_selected(index: int) -> void:
-	GameManager.set_final_category_override(str(_final_category_option.get_item_metadata(index)))
-
-
 func _get_selected_player_index() -> int:
 	var selected := _player_list.get_selected_items()
 	return selected[0] if not selected.is_empty() else -1
 
 
 func _get_selected_category() -> String:
-	var index := _player_category_option.selected
-	if index <= 0:
-		return ""
-	return str(_player_category_option.get_item_metadata(index))
+	return _player_category_key
 
 
 func _select_category(category_name: String) -> void:
-	for i in _player_category_option.item_count:
-		if str(_player_category_option.get_item_metadata(i)) == category_name:
-			_player_category_option.select(i)
-			return
-	_player_category_option.select(0)
+	_player_category_key = category_name if CategoryManager.has_category(category_name) else ""
+	if _player_category_key.is_empty():
+		_set_category_button(_player_category_button, RANDOM_CATEGORY_TEXT, null)
+	else:
+		_set_category_button(_player_category_button, _category_label(_player_category_key),
+				_category_status_icon(_player_category_key))
 
 #endregion
 
