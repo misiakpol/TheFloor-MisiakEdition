@@ -61,13 +61,15 @@ kategorie/                     <- zwykłe kategorie (.gdignore!)
     tlo.jpg                     <-   max. 1 obrazek = tło na ekranie pojedynku
     Take On Me - a-ha.ogg
   Las/bocian.jpg + lis.ogv      <- MIESZANA: zdjęcia + wideo (.ogv) w jednej kategorii
-kategorie final/                <- tylko runda rozstrzygająca finału (.gdignore!)
+  Matematyka.txt                <- TEKSTOWA: sam plik (bez folderu), linia "2+2×2 = 6"
+kategorie final/                <- tylko runda rozstrzygająca finału (.gdignore!; też foldery i .txt)
 audio/music/win/*.ogg           <- muzyka zwycięstwa, ładowana w locie (.gdignore!)
 ```
 
 - Katalog danych: w edytorze `res://` zglobalizowany, w eksporcie **katalog obok .exe** (`CategoryManager.get_data_dir()`). Te foldery trzeba kopiować obok .exe.
 - Obrazki: png/jpg/jpeg/webp/bmp/tga, przy wczytaniu dopasowywane do pola zdjęcia na ekranie (`CategoryManager.image_target_size`, ustawia `Main._update_image_target` z rozmiaru okna; w górę Lanczos, maks. ×4), z mipmapami. W pamięci max. 8 tekstur (`MAX_CACHED_TEXTURES`). Audio pytań: tylko `.ogg` (zapętlone, osobna szyna `Questions`).
 - **Wideo**: tylko `.ogv` (Ogg Theora – jedyny format natywny Godota 4; mp4/mkv/webm/mov/avi dają ostrzeżenie przy skanowaniu). Pytanie ma `kind = KIND_VIDEO`, kategoria pozostaje `KIND_IMAGE` (zdjęcia i wideo mieszają się w jednej talii; opis np. „12 zdj. + 3 wid.”). W kategorii muzycznej wideo jest pomijane. Wczytywanie: `CategoryManager.load_video()` → `VideoStreamTheora` z `file` = ścieżka absolutna (bez importu, bez preloadu). Konwersja: `ffmpeg -i in.mp4 -c:v libtheora -q:v 7 -c:a libvorbis -q:a 5 out.ogv`.
+- **Tekstowe** (`KIND_TEXT`, kategoria i pytania): plik `.txt` leżący bezpośrednio w `kategorie/` (lub `kategorie final/`), nazwa pliku = nazwa kategorii. UTF-8 (BOM i CRLF obsłużone). Linia = `pytanie = odpowiedź`, podział na **ostatnim** `=` (pytanie może zawierać `=`); puste linie i `#…` pomijane, błędne linie → ostrzeżenie z numerem linii; dosłowne `\n` w pytaniu łamie wiersz. Pytanie ma pole `text`, a `path` = `"plik.txt#nr_linii"` (unikalny identyfikator – `preload_file` go pomija). Plik o tej samej nazwie co folder kategorii jest pomijany. Na TV `%QuestionText` w miejscu zdjęcia: czcionka dobierana w `DuelScreen._fit_question_text()` (150→36, pole × `QUESTION_TEXT_FILL`), w karze tekst prawie znika (`DIMMED_TEXT`), żeby nie zlewał się z licznikiem. Konsola: `%AnswerQuestionText` zamiast podglądu zdjęcia, na liście prefiks `[tekst]`, opis „N pyt.”, filtr typu „Tekst” w pickerze.
 - **Klucze vs nazwy**: klucz kategorii = pełna nazwa folderu w formacie proper (`TextUtils.to_proper`); kategorie finałowe mają klucz `"final:" + nazwa`. Do ekranu gry używaj `CategoryManager.get_display_name()` / `GameManager.get_player_category_display()` / `get_duel_category_name()`; do konsoli i statystyk `get_admin_name()`; do zapytań (pytania, tło, czy muzyczna) zawsze **klucza** (`get_duel_category_key()`).
 - Admin: „Skanuj foldery” = `CategoryManager.reload()` (nie w trakcie pojedynku).
 
@@ -96,7 +98,8 @@ Baza 1920×1080, stretch `canvas_items` + `expand`: tekst i kafelki są rysowane
 
 - Komunikacja tylko przez sygnały/metody GameManagera; widoki nie zawierają zasad gry.
 - Sceny `.tscn` bywają zapisywane przez edytor, który dopisuje `unique_id=...` do nagłówków węzłów – przy edycji tekstowej dopasowuj nagłówek po prefiksie (bez zamykającego `]`). Węzły używane w kodzie mają `unique_name_in_owner` (`%Nazwa`).
-- Edycja plików ze skryptów Pythona na Windows: uruchamiaj z `python -X utf8` (polskie znaki), dłuższe skrypty zapisuj do pliku zamiast heredoca.
+- Edycja plików ze skryptów Pythona na Windows: uruchamiaj z `python -X utf8` (polskie znaki), dłuższe skrypty zapisuj do pliku zamiast heredoca. Uwaga na `\n`/`\\n` w GDScript wklejanym przez Pythona (zwykły string Pythona zamieni je na prawdziwy znak nowej linii) – takie linie lepiej poprawić narzędziem Edit.
+- Etykieta z `clip_text` w `PanelContainer` bez `size_flags_*= 3` dostaje wysokość 1 px i jest niewidoczna.
 - Nie twórz/generuj obrazków do kategorii – zawartość folderów `kategorie*/` należy do użytkownika i nie wolno jej ruszać. Tymczasowe foldery testowe w `kategorie/` usuwaj **z powłoki** po teście (nie tylko w skrypcie GDScript – błąd skryptu przerwie sprzątanie).
 - W GDScript `Array[T] + Array[T]` daje nietypowane `Array` – do zmiennej typowanej użyj `.assign()`.
 - Na tej maszynie nie ma ffmpeg (do testów wideo potrzebny prawdziwy plik `.ogv` od użytkownika).

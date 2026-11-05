@@ -12,17 +12,24 @@ extends Control
 ##   pod licznikiem, potem nowe zdjęcie,
 ## [br]- muzyka: bg_duel na czas pojedynku, potem powrót do bg_main,
 ## [br]- kategoria muzyczna: bg_duel milczy, na środku stoi obrazek tła kategorii,
-##   a pytaniem jest automatycznie odtwarzany utwór .ogg (nazwa pliku = odpowiedź).
+##   a pytaniem jest automatycznie odtwarzany utwór .ogg (nazwa pliku = odpowiedź),
+## [br]- kategoria tekstowa (.txt): w miejscu zdjęcia duży tekst pytania, dopasowany do pola.
 
 const FADE_DURATION := 0.35
 const LOW_TIME := 10.0
 const FEEDBACK_DURATION := 1.4
 const INACTIVE_ALPHA := 0.4
 const DIMMED_IMAGE := Color(0.25, 0.25, 0.25)
+const DIMMED_TEXT := Color(1, 1, 1, 0.08)
 const ACCENT_COLOR := Color("ffd166")
 const CORRECT_COLOR := Color("06d6a0")
 const PASS_COLOR := Color("f8961e")
 const DANGER_COLOR := Color("ef476f")
+## Zakres czcionki pytania tekstowego – krótkie działanie jest ogromne, długi cytat mniejszy.
+const QUESTION_FONT_MAX := 150
+const QUESTION_FONT_MIN := 36
+## Tekst zajmuje najwyżej taką część pola zdjęcia (oddech od ramki).
+const QUESTION_TEXT_FILL := 0.88
 
 var _visibility_tween: Tween
 var _image_tween: Tween
@@ -51,6 +58,7 @@ const BROKEN_VIDEO_MS := 300
 const VIDEO_FIRST_FRAME_CHECKS := 10
 var _video_started_ms := 0
 @onready var _placeholder_label: Label = %PlaceholderLabel
+@onready var _question_text: Label = %QuestionText
 @onready var _countdown_label: Label = %CountdownLabel
 @onready var _penalty_box: Control = %PenaltyBox
 @onready var _penalty_label: Label = %PenaltyLabel
@@ -68,8 +76,9 @@ func _ready() -> void:
 	modulate.a = 0.0
 	_feedback_label.modulate.a = 0.0
 	# Animacje skali od środka.
-	for control: Control in [_image_rect, _countdown_label, _penalty_label]:
+	for control: Control in [_image_rect, _question_text, _countdown_label, _penalty_label]:
 		control.resized.connect(func() -> void: control.pivot_offset = control.size * 0.5)
+	_question_text.resized.connect(_fit_question_text)
 
 	GameManager.duel_started.connect(_on_duel_started)
 	_video_rect.finished.connect(_on_video_finished)
@@ -100,6 +109,7 @@ func _on_duel_started(attacker_id: int, defender_id: int) -> void:
 	_kill(_feedback_tween)
 	_stop_video()
 	_image_rect.texture = null
+	_question_text.hide()
 	_feedback_label.modulate.a = 0.0
 	_pause_label.hide()
 	_countdown_label.hide()
@@ -157,7 +167,14 @@ func _on_duel_image_changed(image: Dictionary, previous_answer: String, action: 
 
 	var texture: Texture2D
 	var media: Control = _image_rect # To, co "wskakuje" na ekran.
-	if image.get("kind") == CategoryManager.KIND_VIDEO:
+	_question_text.visible = image.get("kind") == CategoryManager.KIND_TEXT
+	if _question_text.visible:
+		_stop_video()
+		_question_text.text = image.get("text", "")
+		_fit_question_text()
+		media = _question_text
+		_placeholder_label.hide()
+	elif image.get("kind") == CategoryManager.KIND_VIDEO:
 		# Pytanie = wideo w pętli; muzyka tła wyciszona na czas filmu.
 		var video := CategoryManager.load_video(image.get("path", ""))
 		_play_video(video)
@@ -355,6 +372,7 @@ func _hide_penalty(instant: bool) -> void:
 		_kill(_dim_tween)
 		_image_rect.self_modulate = Color.WHITE
 		_video_rect.self_modulate = Color.WHITE
+		_question_text.self_modulate = Color.WHITE
 	else:
 		_tween_image_dim(Color.WHITE)
 
@@ -419,12 +437,31 @@ func _on_video_finished() -> void:
 	_video_started_ms = Time.get_ticks_msec()
 
 
+## Największa czcionka, przy której cały tekst pytania mieści się w polu zdjęcia.
+func _fit_question_text() -> void:
+	if not _question_text.visible or _question_text.size.x <= 1.0:
+		return
+	var font := _question_text.get_theme_font("font")
+	var area := _question_text.size * QUESTION_TEXT_FILL
+	var font_size := QUESTION_FONT_MAX
+	while font_size > QUESTION_FONT_MIN:
+		var text_size := font.get_multiline_string_size(_question_text.text, HORIZONTAL_ALIGNMENT_CENTER,
+				area.x, font_size, -1, TextServer.BREAK_MANDATORY | TextServer.BREAK_WORD_BOUND)
+		if text_size.x <= area.x and text_size.y <= area.y:
+			break
+		font_size -= 4
+	_question_text.add_theme_font_size_override("font_size", font_size)
+
+
 ## Przyciemnianie przez self_modulate – modulate:a jest zajęte przez "wskoczenie" zdjęcia.
 func _tween_image_dim(target: Color) -> void:
 	_kill(_dim_tween)
 	_dim_tween = create_tween().set_parallel()
 	_dim_tween.tween_property(_image_rect, "self_modulate", target, 0.2)
 	_dim_tween.tween_property(_video_rect, "self_modulate", target, 0.2)
+	# Tekst pytania prawie znika – inaczej zlewa się z licznikiem kary i odpowiedzią.
+	_dim_tween.tween_property(_question_text, "self_modulate",
+			Color.WHITE if target == Color.WHITE else DIMMED_TEXT, 0.2)
 
 
 ## Duża liczba "uderza" w ekran: skala 1.5 -> 1 i pojawienie się.

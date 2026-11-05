@@ -7,10 +7,12 @@ extends Node
 ## ├─ Kuchnia Śląska/          <- kategoria OBRAZKOWA: nazwa folderu = nazwa kategorii
 ## │  ├─ Rolada.jpg            <- nazwa pliku (bez rozszerzenia) = poprawna odpowiedź
 ## │  └─ Kluski śląskie.png
-## └─ Hity lat 80/             <- kategoria MUZYCZNA: zawiera pliki .ogg
-##    ├─ tlo.jpg               <- (opcjonalnie) JEDEN obrazek – tło na ekranie pojedynku
-##    ├─ Take on me - a-ha.ogg <- nazwa pliku = poprawna odpowiedź
-##    └─ ...
+## ├─ Hity lat 80/             <- kategoria MUZYCZNA: zawiera pliki .ogg
+## │  ├─ tlo.jpg               <- (opcjonalnie) JEDEN obrazek – tło na ekranie pojedynku
+## │  ├─ Take on me - a-ha.ogg <- nazwa pliku = poprawna odpowiedź
+## │  └─ ...
+## └─ Matematyka.txt           <- kategoria TEKSTOWA: plik (bez folderu), nazwa pliku = nazwa kategorii,
+##                               każda linia "pytanie = odpowiedź", np. "2+2×2 = 6"
 ## [/codeblock]
 ## Folder [code]kategorie final/[/code] ma identyczną strukturę, ale jego kategorie grane są
 ## WYŁĄCZNIE w decydującej rundzie finału (przy remisie 1:1). Nie trafiają do listy kategorii
@@ -36,6 +38,8 @@ const FINAL_CATEGORIES_DIR := "kategorie final"
 const FINAL_PREFIX := "final:"
 const IMAGE_EXTENSIONS: PackedStringArray = ["png", "jpg", "jpeg", "webp", "bmp", "tga"]
 const AUDIO_EXTENSIONS: PackedStringArray = ["ogg"]
+## Kategoria tekstowa: plik leżący bezpośrednio w folderze kategorii.
+const TEXT_EXTENSIONS: PackedStringArray = ["txt"]
 ## Godot 4 odtwarza natywnie tylko Ogg Theora. Inne formaty wideo trzeba skonwertować do .ogv.
 const VIDEO_EXTENSIONS: PackedStringArray = ["ogv"]
 const UNSUPPORTED_VIDEO_EXTENSIONS: PackedStringArray = ["mp4", "mkv", "webm", "mov", "avi", "m4v", "wmv"]
@@ -43,6 +47,8 @@ const KIND_IMAGE := "image"
 const KIND_MUSIC := "music"
 ## Pytanie-wideo (w kategorii obrazkowej, także mieszanej ze zdjęciami). Kategoria ma wtedy kind KIND_IMAGE.
 const KIND_VIDEO := "video"
+## Kategoria tekstowa (plik .txt): pytaniem jest tekst wyświetlany na ekranie.
+const KIND_TEXT := "text"
 ## Rozmiar pola zdjęcia na ekranie gry w pikselach (ustawia Main wg okna). Zdjęcia są do niego
 ## dopasowywane przy wczytaniu: ostre w 4K, a na mniejszym ekranie nie marnują pamięci.
 const DEFAULT_IMAGE_TARGET := Vector2i(922, 814)
@@ -52,8 +58,10 @@ const MAX_IMAGE_UPSCALE := 4.0
 const MAX_CACHED_TEXTURES := 8
 
 ## Wczytane kategorie, posortowane po nazwie. Każdy element:
-## [code]{ "name", "path", "kind": KIND_IMAGE|KIND_MUSIC, "background": String, "questions": Array[Dictionary] }[/code],
-## a każde pytanie: [code]{ "answer": String, "path": String, "kind": KIND_IMAGE|KIND_MUSIC|KIND_VIDEO }[/code].
+## [code]{ "name", "path", "kind": KIND_IMAGE|KIND_MUSIC|KIND_TEXT, "background": String, "questions": Array[Dictionary] }[/code],
+## a każde pytanie: [code]{ "answer": String, "path": String, "kind": KIND_IMAGE|KIND_MUSIC|KIND_VIDEO|KIND_TEXT }[/code].
+## Pytanie tekstowe ma dodatkowo [code]"text"[/code], a jego [code]path[/code] to "plik.txt#nr_linii"
+## (unikalny identyfikator pytania, nie plik do wczytania).
 ## Kategoria obrazkowa może mieszać zdjęcia i wideo (.ogv) – wideo gra w pętli na ekranie pojedynku.
 ## [code]background[/code] – ścieżka obrazka tła kategorii muzycznej (lub pusta).
 var categories: Array[Dictionary] = []
@@ -112,12 +120,12 @@ func reload() -> void:
 	var root := get_categories_dir()
 	if not DirAccess.dir_exists_absolute(root):
 		_ensure_categories_dir(root)
-		_fail("Utworzono pusty folder kategorii: %s – dodaj do niego podfoldery ze zdjęciami." % root)
+		_fail("Utworzono pusty folder kategorii: %s – dodaj do niego podfoldery ze zdjęciami albo pliki .txt z pytaniami." % root)
 		return
 
 	categories = _scan_root(root, "")
 	if categories.is_empty():
-		_fail("Folder %s nie zawiera żadnych podfolderów z kategoriami." % root)
+		_fail("Folder %s nie zawiera żadnych kategorii (podfolderów ani plików .txt)." % root)
 		return
 
 	print("[CategoryManager] Wczytano %d kategorii z: %s" % [categories.size(), root])
@@ -198,6 +206,8 @@ func describe_question_count(category_name: String) -> String:
 	var questions := get_questions(category_name)
 	if is_music_category(category_name):
 		return "%d utw." % questions.size()
+	if get_category(category_name).get("kind") == KIND_TEXT:
+		return "%d pyt." % questions.size()
 	var videos := questions.filter(func(question: Dictionary) -> bool: return question["kind"] == KIND_VIDEO).size()
 	if videos == 0:
 		return "%d zdj." % questions.size()
@@ -211,8 +221,9 @@ func describe_question_count(category_name: String) -> String:
 func preload_file(path: String) -> void:
 	if path.is_empty() or _resource_cache.has(path) or _preload_tasks.has(path):
 		return
-	if path.get_extension().to_lower() in VIDEO_EXTENSIONS:
-		return # Wideo jest strumieniowane z dysku – nie ma czego wczytywać z wyprzedzeniem.
+	var extension := path.get_extension().to_lower().get_slice("#", 0)
+	if extension in VIDEO_EXTENSIONS or extension in TEXT_EXTENSIONS:
+		return # Wideo jest strumieniowane z dysku, a tekst jest już w pamięci.
 	_preload_tasks[path] = WorkerThreadPool.add_task(
 			_load_in_background.bind(path), false, "Preload " + path.get_file())
 
@@ -278,10 +289,26 @@ func _scan_root(root: String, key_prefix: String) -> Array[Dictionary]:
 		return result
 	var folder_names := Array(DirAccess.get_directories_at(root))
 	folder_names.sort_custom(_natural_less)
+	var keys: Dictionary = {}
 	for folder_name: String in folder_names:
 		if folder_name.begins_with("."):
 			continue
-		result.append(_scan_category(root.path_join(folder_name), key_prefix + TextUtils.to_proper(folder_name)))
+		var key := key_prefix + TextUtils.to_proper(folder_name)
+		keys[key] = true
+		result.append(_scan_category(root.path_join(folder_name), key))
+
+	# Kategorie tekstowe: pliki .txt leżące bezpośrednio w folderze kategorii.
+	for file_name: String in DirAccess.get_files_at(root):
+		if file_name.begins_with(".") or file_name.get_extension().to_lower() not in TEXT_EXTENSIONS:
+			continue
+		var key := key_prefix + TextUtils.to_proper(file_name.get_basename())
+		if keys.has(key):
+			push_warning("[CategoryManager] Plik %s ma tę samą nazwę co folder kategorii – pomijam go." % root.path_join(file_name))
+			continue
+		keys[key] = true
+		result.append(_scan_text_category(root.path_join(file_name), key))
+
+	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return _natural_less(a["name"], b["name"]))
 	return result
 
 
@@ -341,6 +368,28 @@ func _scan_category(path: String, category_name: String) -> Dictionary:
 	if questions.is_empty():
 		push_warning("[CategoryManager] Kategoria \"%s\" nie zawiera zdjęć, wideo ani utworów." % category_name)
 	return { "name": category_name, "path": path, "kind": KIND_IMAGE, "background": "", "questions": questions }
+
+
+## Plik .txt: każda niepusta linia to "pytanie = odpowiedź" (dzielone na OSTATNIM "=",
+## więc pytanie może zawierać "="). Linie zaczynające się od "#" to komentarze, a "\n"
+## (dosłownie, ukośnik + n) w pytaniu łamie wiersz na ekranie.
+func _scan_text_category(path: String, category_name: String) -> Dictionary:
+	var questions: Array[Dictionary] = []
+	var lines := FileAccess.get_file_as_string(path).trim_prefix(char(0xFEFF)).split("\n")
+	for i in lines.size():
+		var line := lines[i].strip_edges()
+		if line.is_empty() or line.begins_with("#"):
+			continue
+		var separator := line.rfind("=")
+		var text := line.substr(0, maxi(separator, 0)).strip_edges().replace("\\n", "\n")
+		var answer := line.substr(separator + 1).strip_edges()
+		if separator < 0 or text.is_empty() or answer.is_empty():
+			push_warning("[CategoryManager] %s, linia %d: oczekiwano \"pytanie = odpowiedź\" – pomijam." % [path, i + 1])
+			continue
+		questions.append({ "answer": answer, "text": text, "path": "%s#%d" % [path, i + 1], "kind": KIND_TEXT })
+	if questions.is_empty():
+		push_warning("[CategoryManager] Kategoria tekstowa \"%s\" nie zawiera pytań." % category_name)
+	return { "name": category_name, "path": path, "kind": KIND_TEXT, "background": "", "questions": questions }
 
 
 func _take_preloaded(path: String) -> Variant:

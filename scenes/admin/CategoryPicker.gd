@@ -18,6 +18,7 @@ const TYPE_LABELS: Array[Array] = [
 	["Zdjęcia", CategoryManager.KIND_IMAGE],
 	["Muzyka", CategoryManager.KIND_MUSIC],
 	["Wideo", CategoryManager.KIND_VIDEO],
+	["Tekst", CategoryManager.KIND_TEXT],
 ]
 const CURRENT_COLOR := Color("ffd166")
 const PLAYED_COLOR := Color(0.62, 0.64, 0.74)

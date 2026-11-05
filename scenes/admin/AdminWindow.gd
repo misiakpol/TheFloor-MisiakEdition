@@ -124,6 +124,7 @@ var _synced_player_count := GameManager.MIN_PLAYERS
 @onready var _answer_caption: Label = %AnswerCaption
 @onready var _answer_label: Label = %AnswerLabel
 @onready var _answer_preview: TextureRect = %AnswerPreview
+@onready var _answer_question_text: Label = %AnswerQuestionText
 ## Podgląd pytania-wideo (wyciszony – dźwięk gra tylko na TV).
 @onready var _answer_video_box: AspectRatioContainer = %AnswerVideoBox
 @onready var _answer_video: VideoStreamPlayer = %AnswerVideo
@@ -334,7 +335,13 @@ func _on_duel_image_changed(question: Dictionary, _previous_answer: String, _act
 	_answer_label.text = question.get("answer", "?")
 	# Ta sama tekstura co na TV – CategoryManager zwraca ją z cache.
 	_show_answer_video(null)
-	if question.get("kind") == CategoryManager.KIND_VIDEO:
+	var is_text: bool = question.get("kind") == CategoryManager.KIND_TEXT
+	_answer_question_text.visible = is_text
+	_answer_preview.visible = not is_text
+	if is_text:
+		_answer_caption.text = "POPRAWNA ODPOWIEDŹ (PYTANIE PONIŻEJ)"
+		_answer_question_text.text = question.get("text", "")
+	elif question.get("kind") == CategoryManager.KIND_VIDEO:
 		_answer_caption.text = "POPRAWNA ODPOWIEDŹ (WIDEO)"
 		_show_answer_video(CategoryManager.load_video(question.get("path", "")))
 	elif question.get("kind") == CategoryManager.KIND_MUSIC:
@@ -513,10 +520,11 @@ func _populate_category_views() -> void:
 		var category_name: String = category["name"]
 		var count_text := CategoryManager.describe_question_count(category_name)
 		var is_music: bool = category["kind"] == CategoryManager.KIND_MUSIC
+		var is_text: bool = category["kind"] == CategoryManager.KIND_TEXT
 		var played := GameManager.is_category_played(category_name)
 		var played_text := PLAYED_SUFFIX if played else ""
 		var index := _category_list.add_item("%s%s — %s%s" % [
-			"[muz.] " if is_music else "", category_name, count_text, played_text,
+			"[muz.] " if is_music else "[tekst] " if is_text else "", category_name, count_text, played_text,
 		], _category_icon(category_name))
 		_category_list.set_item_tooltip(index, category["path"])
 		if played:
@@ -524,7 +532,9 @@ func _populate_category_views() -> void:
 			_category_list.set_item_tooltip(index, "Zagrana w tej sesji – losowanie wybierze ją dopiero, gdy zabraknie nowych.")
 		if category["questions"].is_empty():
 			_category_list.set_item_custom_fg_color(index, WARNING_COLOR)
-			_category_list.set_item_tooltip(index, "Pusty folder: %s" % category["path"])
+			_category_list.set_item_tooltip(index, "%s: %s" % [
+				"Plik bez pytań \"pytanie = odpowiedź\"" if is_text else "Pusty folder", category["path"],
+			])
 		elif is_music and category["background"].is_empty():
 			_category_list.set_item_tooltip(index, "Kategoria muzyczna bez obrazka tła (dodaj np. tlo.jpg).")
 

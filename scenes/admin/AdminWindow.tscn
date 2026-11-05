@@ -252,6 +252,7 @@ text = "THE FLOOR · Konsola Admina"
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
+theme_override_constants/tab_separation = 4
 current_tab = 0
 
 [node name="Konfiguracja" type="HBoxContainer" parent="Root/Margin/VBox/Tabs" unique_id=1591054605]
@@ -287,8 +288,8 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 tooltip_text = "Kliknij, aby wybrać kategorię gracza."
-clip_text = true
 alignment = 0
+clip_text = true
 
 [node name="AddPlayerButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn/PlayerForm" unique_id=27256664]
 unique_name_in_owner = true
@@ -399,7 +400,7 @@ layout_mode = 2
 tooltip_text = "Ponownie skanuje folder kategorie/ (podfoldery, zdjęcia i utwory)."
 text = "Skanuj foldery"
 
-[node name="ResetPlayedButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryRow"]
+[node name="ResetPlayedButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryRow" unique_id=1096775671]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Oznacza wszystkie kategorie jako niezagrane (nowe) w tej sesji."
@@ -460,10 +461,10 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 tooltip_text = "Kliknij, aby wybrać. Domyślnie losowa z folderu kategorie final/, można też zwykłą kategorię."
-clip_text = true
 alignment = 0
+clip_text = true
 
-[node name="ResetFinalPoolButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/FinalPickRow"]
+[node name="ResetFinalPoolButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/FinalPickRow" unique_id=1307574384]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Przywraca do losowania kategorie finałowe zużyte w tej sesji."
@@ -478,15 +479,15 @@ theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
 theme_override_font_sizes/font_size = 13
 text = "USTAWIENIA GRY I GŁOŚNOŚĆ"
 
-[node name="DuelTimeRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn"]
+[node name="DuelTimeRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn" unique_id=1462094378]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="DuelTimeLabel" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/DuelTimeRow"]
+[node name="DuelTimeLabel" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/DuelTimeRow" unique_id=1005919807]
 layout_mode = 2
 text = "Czas na odpowiedź (s)"
 
-[node name="DuelTimeSpin" type="SpinBox" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/DuelTimeRow"]
+[node name="DuelTimeSpin" type="SpinBox" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/DuelTimeRow" unique_id=285074434]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -496,7 +497,7 @@ max_value = 300.0
 value = 45.0
 suffix = "s"
 
-[node name="SaveSettingsButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/DuelTimeRow"]
+[node name="SaveSettingsButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/DuelTimeRow" unique_id=371243956]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Zapisuje czas na odpowiedź i głośności – wczytają się przy następnym uruchomieniu."
@@ -752,7 +753,18 @@ size_flags_vertical = 3
 expand_mode = 1
 stretch_mode = 5
 
-[node name="AnswerVideoBox" type="AspectRatioContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn"]
+[node name="AnswerQuestionText" type="Label" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 120)
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_font_sizes/font_size = 26
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 3
+
+[node name="AnswerVideoBox" type="AspectRatioContainer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn" unique_id=974782132]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(0, 120)
@@ -761,7 +773,7 @@ size_flags_vertical = 3
 mouse_filter = 2
 ratio = 1.7778
 
-[node name="AnswerVideo" type="VideoStreamPlayer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn/AnswerVideoBox"]
+[node name="AnswerVideo" type="VideoStreamPlayer" parent="Root/Margin/VBox/Tabs/Rozgrywka/DuelView/DuelInfoColumn/AnswerVideoBox" unique_id=1636218866]
 unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 2
@@ -863,63 +875,63 @@ layout_mode = 2
 focus_mode = 0
 text = "Przerwij pojedynek (bez zmian na podłodze)"
 
-[node name="Szybki" type="VBoxContainer" parent="Root/Margin/VBox/Tabs"]
+[node name="Szybki" type="VBoxContainer" parent="Root/Margin/VBox/Tabs" unique_id=761858222]
 visible = false
 layout_mode = 2
 theme_override_constants/separation = 14
 metadata/_tab_index = 2
 
-[node name="QuickTitle" type="Label" parent="Root/Margin/VBox/Tabs/Szybki"]
+[node name="QuickTitle" type="Label" parent="Root/Margin/VBox/Tabs/Szybki" unique_id=1034793191]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
 theme_override_font_sizes/font_size = 13
 text = "JEDNORAZOWY POJEDYNEK"
 
-[node name="QuickHint" type="Label" parent="Root/Margin/VBox/Tabs/Szybki"]
+[node name="QuickHint" type="Label" parent="Root/Margin/VBox/Tabs/Szybki" unique_id=748052889]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
 text = "Bez podłogi i bez wpisywania graczy. Jedna runda, wynik nie trafia do statystyk, a po pojedynku gra wraca do poprzedniego stanu. Kategoria zostaje oznaczona jako zagrana."
 autowrap_mode = 3
 
-[node name="QuickNamesRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Szybki"]
+[node name="QuickNamesRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Szybki" unique_id=1220713601]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="QuickNameA" type="LineEdit" parent="Root/Margin/VBox/Tabs/Szybki/QuickNamesRow"]
+[node name="QuickNameA" type="LineEdit" parent="Root/Margin/VBox/Tabs/Szybki/QuickNamesRow" unique_id=980226615]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 placeholder_text = "Gracz A (opcjonalnie)"
 max_length = 32
 
-[node name="QuickVsLabel" type="Label" parent="Root/Margin/VBox/Tabs/Szybki/QuickNamesRow"]
+[node name="QuickVsLabel" type="Label" parent="Root/Margin/VBox/Tabs/Szybki/QuickNamesRow" unique_id=1796047540]
 layout_mode = 2
 text = "vs"
 
-[node name="QuickNameB" type="LineEdit" parent="Root/Margin/VBox/Tabs/Szybki/QuickNamesRow"]
+[node name="QuickNameB" type="LineEdit" parent="Root/Margin/VBox/Tabs/Szybki/QuickNamesRow" unique_id=177550519]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 placeholder_text = "Gracz B (opcjonalnie)"
 max_length = 32
 
-[node name="QuickCategoryRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Szybki"]
+[node name="QuickCategoryRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Szybki" unique_id=2144968204]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="QuickCategoryLabel" type="Label" parent="Root/Margin/VBox/Tabs/Szybki/QuickCategoryRow"]
+[node name="QuickCategoryLabel" type="Label" parent="Root/Margin/VBox/Tabs/Szybki/QuickCategoryRow" unique_id=473743785]
 layout_mode = 2
 text = "Kategoria"
 
-[node name="QuickCategoryOption" type="Button" parent="Root/Margin/VBox/Tabs/Szybki/QuickCategoryRow"]
+[node name="QuickCategoryOption" type="Button" parent="Root/Margin/VBox/Tabs/Szybki/QuickCategoryRow" unique_id=1553952409]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 size_flags_horizontal = 3
-clip_text = true
 alignment = 0
+clip_text = true
 
-[node name="QuickStartButton" type="Button" parent="Root/Margin/VBox/Tabs/Szybki"]
+[node name="QuickStartButton" type="Button" parent="Root/Margin/VBox/Tabs/Szybki" unique_id=17493468]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 64)
 layout_mode = 2
@@ -928,30 +940,30 @@ theme_override_styles/normal = SubResource("StyleBox_correct")
 theme_override_styles/hover = SubResource("StyleBox_correct_hover")
 text = "Rozpocznij szybki pojedynek"
 
-[node name="Statystyki" type="VBoxContainer" parent="Root/Margin/VBox/Tabs"]
+[node name="Statystyki" type="VBoxContainer" parent="Root/Margin/VBox/Tabs" unique_id=660545749]
 visible = false
 layout_mode = 2
 theme_override_constants/separation = 10
 metadata/_tab_index = 3
 
-[node name="StatsHeaderRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Statystyki"]
+[node name="StatsHeaderRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Statystyki" unique_id=416376306]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="RankingTitle" type="Label" parent="Root/Margin/VBox/Tabs/Statystyki/StatsHeaderRow"]
+[node name="RankingTitle" type="Label" parent="Root/Margin/VBox/Tabs/Statystyki/StatsHeaderRow" unique_id=226713577]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
 theme_override_font_sizes/font_size = 13
 text = "RANKING SESJI (tytuły > wygrane pojedynki > % wygranych > pola > poprawne)  •  kliknij nagłówek kolumny, aby sortować"
 
-[node name="ResetStatsButton" type="Button" parent="Root/Margin/VBox/Tabs/Statystyki/StatsHeaderRow"]
+[node name="ResetStatsButton" type="Button" parent="Root/Margin/VBox/Tabs/Statystyki/StatsHeaderRow" unique_id=1374316795]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Zeruje statystyki bieżącej sesji (podwójne kliknięcie dla pewności)."
 text = "Wyczyść statystyki"
 
-[node name="RankingTree" type="Tree" parent="Root/Margin/VBox/Tabs/Statystyki"]
+[node name="RankingTree" type="Tree" parent="Root/Margin/VBox/Tabs/Statystyki" unique_id=57806758]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 260)
 layout_mode = 2
@@ -961,13 +973,13 @@ column_titles_visible = true
 hide_root = true
 select_mode = 1
 
-[node name="FactsTitle" type="Label" parent="Root/Margin/VBox/Tabs/Statystyki"]
+[node name="FactsTitle" type="Label" parent="Root/Margin/VBox/Tabs/Statystyki" unique_id=1432052312]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
 theme_override_font_sizes/font_size = 13
 text = "CIEKAWOSTKI SESJI"
 
-[node name="FactsLabel" type="RichTextLabel" parent="Root/Margin/VBox/Tabs/Statystyki"]
+[node name="FactsLabel" type="RichTextLabel" parent="Root/Margin/VBox/Tabs/Statystyki" unique_id=113740927]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 170)
 layout_mode = 2
