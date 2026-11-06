@@ -441,15 +441,8 @@ func _on_video_finished() -> void:
 func _fit_question_text() -> void:
 	if not _question_text.visible or _question_text.size.x <= 1.0:
 		return
-	var font := _question_text.get_theme_font("font")
-	var area := _question_text.size * QUESTION_TEXT_FILL
-	var font_size := QUESTION_FONT_MAX
-	while font_size > QUESTION_FONT_MIN:
-		var text_size := font.get_multiline_string_size(_question_text.text, HORIZONTAL_ALIGNMENT_CENTER,
-				area.x, font_size, -1, TextServer.BREAK_MANDATORY | TextServer.BREAK_WORD_BOUND)
-		if text_size.x <= area.x and text_size.y <= area.y:
-			break
-		font_size -= 4
+	var font_size := TextUtils.fit_font_size(_question_text.get_theme_font("font"), _question_text.text,
+			_question_text.size * QUESTION_TEXT_FILL, QUESTION_FONT_MAX, QUESTION_FONT_MIN, 4)
 	_question_text.add_theme_font_size_override("font_size", font_size)
 
 

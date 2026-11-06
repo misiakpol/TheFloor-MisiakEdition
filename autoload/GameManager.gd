@@ -53,6 +53,8 @@ signal duel_answered(player_id: int, correct: bool, seconds: float, answer: Stri
 signal used_final_categories_changed
 ## Zmieniła się lista kategorii zagranych w tej sesji ([member played_categories]).
 signal played_categories_changed
+## Zmieniła się lista kategorii wykluczonych z losowania ([member excluded_categories]).
+signal excluded_categories_changed
 ## Pojedynek zakończony (rozstrzygnięty lub przerwany) – ekran pojedynku może zniknąć.
 signal duel_ended
 ## Finał: runda [param round_number] rozstrzygnięta (za chwilę przyjdzie duel_started kolejnej
@@ -66,6 +68,8 @@ signal game_over(winner_id: int)
 signal quick_duel_finished(winner_name: String, winner_color: Color, category_name: String)
 ## Ogólny sygnał "coś się zmieniło" – wygodny do odświeżania UI admina.
 signal state_changed
+## Zmienił się widok ekranu TV ([member tv_view]).
+signal tv_view_changed
 signal log_message(text: String)
 
 ## ROLLING – trwa animacja ruletki (wynik jest już znany, ale jeszcze nie ogłoszony).
@@ -75,6 +79,9 @@ enum Phase { NO_FLOOR, IDLE, ROLLING, PLAYER_SELECTED, DUEL, GAME_OVER }
 ## PAUSED – wstrzymane (dowolny z trzech powyższych); TIMEOUT – komuś skończył się czas.
 enum DuelState { READY, COUNTDOWN, RUNNING, PENALTY, PAUSED, TIMEOUT }
 enum DuelAction { START, CORRECT, PASS }
+## Co pokazuje ekran TV poza pojedynkiem: podłogę albo (przed grą) listę graczy z listy
+## admina / tablicę kategorii do wyboru. Losowanie, pojedynek i nowa podłoga wracają do FLOOR.
+enum TvView { FLOOR, PLAYERS, CATEGORIES }
 
 const MIN_PLAYERS := 2
 const MAX_PLAYERS := 100
@@ -98,6 +105,7 @@ const QUICK_DEFAULT_NAMES: PackedStringArray = ["Gracz A", "Gracz B"]
 const FINAL_ROUNDS_TO_WIN := 2
 
 var phase: Phase = Phase.NO_FLOOR
+var tv_view: TvView = TvView.PLAYERS
 var columns := 0
 var rows := 0
 
@@ -153,6 +161,9 @@ var used_final_categories: Array[String] = []
 ## Kategorie (klucze), w których w TEJ sesji faktycznie grano – START pojedynku/rundy
 ## (gracze widzieli ich zawartość). Losowanie kategorii dla graczy omija je w pierwszej kolejności.
 var played_categories: Array[String] = []
+## Klucze kategorii (zwykłych i finałowych) pomijanych przez KAŻDE losowanie kategorii.
+## Ręcznie (gracz, runda 3, szybki pojedynek) nadal można je wybrać. Zapisywane w ustawieniach.
+var excluded_categories: Array[String] = []
 ## Czas, który upłynął w bieżącym kroku odliczania / kary (kroki co 1 s).
 var _duel_step_time := 0.0
 ## Czas zegara (RUNNING), jaki upłynął na bieżące pytanie.
@@ -320,6 +331,7 @@ func generate_floor(player_count: int, shuffle_positions := true) -> void:
 			])
 
 	floor_generated.emit(columns, rows)
+	set_tv_view(TvView.FLOOR)
 	_set_phase(Phase.IDLE)
 
 
@@ -342,6 +354,7 @@ func select_random_player() -> void:
 	selected_player_id = -1
 	defender_id = -1
 	_roll_id += 1
+	set_tv_view(TvView.FLOOR)
 	_set_phase(Phase.ROLLING)
 	player_roll_started.emit(candidates, winner_id, ROLL_DURATION)
 	get_tree().create_timer(ROLL_DURATION).timeout.connect(_finish_roll.bind(_roll_id, winner_id))
@@ -435,6 +448,7 @@ func start_duel(target_player_id: int) -> void:
 	final_score = PackedInt32Array([0, 0])
 	if is_final:
 		_log("FINAŁ! Rundy do %d wygranych." % FINAL_ROUNDS_TO_WIN)
+	set_tv_view(TvView.FLOOR)
 	_start_round(category)
 	_set_phase(Phase.DUEL)
 
@@ -679,16 +693,16 @@ func set_final_category_override(category_key: String) -> void:
 		_log("Runda rozstrzygająca finału: kategoria \"%s\" (wybór admina)." % CategoryManager.get_display_name(category_key))
 
 
-## Kategorie finałowe z pytaniami, które NIE były jeszcze grane w tej sesji.
 ## Czas na odpowiedź (s). Działa od następnego pojedynku / rundy – trwający nie jest zmieniany.
 func set_duel_time(seconds: float) -> void:
 	duel_time = clampf(roundf(seconds), MIN_DUEL_TIME, MAX_DUEL_TIME)
 
 
+## Pula losowania rundy 3: kategorie finałowe z pytaniami, niegrane w tej sesji i niewykluczone.
 func get_unused_final_categories() -> Array[String]:
 	var unused: Array[String] = []
 	for key in CategoryManager.get_final_category_keys():
-		if key not in used_final_categories:
+		if key not in used_final_categories and key not in excluded_categories:
 			unused.append(key)
 	return unused
 
@@ -697,7 +711,6 @@ func is_final_category_used(category_key: String) -> bool:
 	return category_key in used_final_categories
 
 
-## Przywraca wszystkie kategorie finałowe do puli losowania (np. nowy wieczór gry).
 func is_category_played(category_key: String) -> bool:
 	return category_key in played_categories
 
@@ -716,6 +729,29 @@ func _mark_category_played(category_key: String) -> void:
 	played_categories_changed.emit()
 
 
+func is_category_excluded(category_key: String) -> bool:
+	return category_key in excluded_categories
+
+
+func set_category_excluded(category_key: String, excluded: bool) -> void:
+	if excluded == is_category_excluded(category_key) or category_key.is_empty():
+		return
+	if excluded:
+		excluded_categories.append(category_key)
+	else:
+		excluded_categories.erase(category_key)
+	_log("Kategoria \"%s\" %s." % [CategoryManager.get_admin_name(category_key),
+			"wykluczona z losowania" if excluded else "wraca do losowania"])
+	excluded_categories_changed.emit()
+
+
+## Wczytanie z ustawień (bez logowania pojedynczych zmian).
+func set_excluded_categories(category_keys: Array) -> void:
+	excluded_categories.assign(category_keys)
+	excluded_categories_changed.emit()
+
+
+## Przywraca wszystkie kategorie finałowe do puli losowania (np. nowy wieczór gry).
 func reset_used_final_categories() -> void:
 	used_final_categories.clear()
 	_log("Wszystkie kategorie finałowe wróciły do puli losowania.")
@@ -747,7 +783,8 @@ func _choose_final_category() -> String:
 		var played := [get_player_category(defender_id), get_player_category(selected_player_id), duel_category]
 		keys = CategoryManager.get_category_names().filter(
 			func(category_name: String) -> bool:
-				return category_name not in played and not CategoryManager.get_questions(category_name).is_empty()
+				return category_name not in played and category_name not in excluded_categories \
+						and not CategoryManager.get_questions(category_name).is_empty()
 		)
 	return keys.pick_random() if not keys.is_empty() else ""
 
@@ -1017,6 +1054,7 @@ func _make_placeholder_name(taken_names: Array) -> String:
 
 ## Losowa kategoria ze zdjęciami. "Zajęta" = na tej podłodze jest już kategoria o tej samej
 ## nazwie wyświetlanej (także inny wariant, np. "Marvel [Postacie]" przy "Marvel [Aktorzy]").
+## Wykluczone z losowania są pomijane (chyba że wykluczono wszystkie).
 ## Kolejność preferencji:
 ## [br]1. niezagrana w tej sesji i niezajęta przez innego gracza na tej podłodze,
 ## [br]2. niezajęta na tej podłodze (choć już grana w sesji),
@@ -1030,6 +1068,11 @@ func _pick_free_category(used_categories: Array[String]) -> String:
 		playable = all_names
 	if playable.is_empty():
 		return NO_CATEGORY
+	var allowed := playable.filter(func(category: String) -> bool: return category not in excluded_categories)
+	if allowed.is_empty():
+		_log("Wszystkie kategorie są wykluczone z losowania – losuję mimo to spośród wszystkich.")
+	else:
+		playable = allowed
 
 	var unused := playable.filter(
 		func(category: String) -> bool: return not _is_display_name_taken(category, used_categories)
@@ -1076,6 +1119,19 @@ func get_roster_category_conflict(category: String, ignored_index: int) -> int:
 				and CategoryManager.get_display_name(other).to_lower() == display:
 			return i
 	return -1
+
+
+## Przełącza widok ekranu TV (konsola admina, zakładka Konfiguracja).
+func set_tv_view(view: TvView) -> void:
+	if view == tv_view:
+		return
+	tv_view = view
+	tv_view_changed.emit()
+
+
+## Kolor, który gracz z listy (indeks [param roster_index]) dostanie na podłodze.
+func get_roster_color(roster_index: int) -> Color:
+	return _make_player_color(roster_index)
 
 
 ## Złoty podział na kole barw = kolejne kolory są od siebie maksymalnie odległe.

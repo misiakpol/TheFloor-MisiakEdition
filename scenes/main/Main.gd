@@ -15,6 +15,8 @@ extends Control
 ## a dziecko-okno AdminWindow na pierwszym monitorze.
 ## Audio planszy: bg_main, woosh przy łączeniu terytorium, losowa muzyka zwycięstwa
 ## (gaszona przez AudioManager po 60 s albo przy nowej podłodze).
+## Przed grą zamiast podłogi może stać LobbyScreen (lista graczy / kategorie do wyboru) –
+## wg [member GameManager.tv_view], przełączanego z konsoli admina.
 
 const TILE_SCENE: PackedScene = preload("res://scenes/tile/Tile.tscn")
 const RADIAL_CAPTURE_SHADER: Shader = preload("res://scenes/tile/radial_capture.gdshader")
@@ -81,6 +83,8 @@ var _quick_winner_token := 0
 @onready var _winner_screen: WinnerScreen = $WinnerScreen
 ## Konfetti na koniec gry – rysowane nad podłogą i ekranem pojedynku.
 @onready var _confetti: Confetti = _create_confetti()
+## Lista graczy / tablica kategorii przed grą – nad podłogą, pod ekranem pojedynku.
+@onready var _lobby: LobbyScreen = _create_lobby()
 
 
 func _ready() -> void:
@@ -93,6 +97,7 @@ func _ready() -> void:
 	var screen_size := DisplayServer.screen_get_size(game_screen_index)
 	GameManager.log_message.emit("Ekran gry: monitor %d, %d × %d px." % [game_screen_index, screen_size.x, screen_size.y])
 	_show_banner("Czekamy na wygenerowanie podłogi...", Color.WHITE)
+	_on_tv_view_changed()
 	AudioManager.play_music(AudioManager.MUSIC_MAIN)
 
 
@@ -136,6 +141,18 @@ func _connect_game_signals() -> void:
 	GameManager.territory_captured.connect(_on_territory_captured)
 	GameManager.selection_cleared.connect(_on_selection_cleared)
 	GameManager.game_over.connect(_on_game_over)
+	GameManager.tv_view_changed.connect(_on_tv_view_changed)
+
+
+## Podłoga albo LobbyScreen. Lobby zasłania też ekran zwycięzcy (np. po grze, przy
+## konfiguracji kolejnej) – ten i konfetti chowamy, bo leżą wyżej niż lobby.
+func _on_tv_view_changed() -> void:
+	var show_floor := GameManager.tv_view == GameManager.TvView.FLOOR
+	_layout.visible = show_floor
+	_lobby.set_view(GameManager.tv_view)
+	if not show_floor:
+		_winner_screen.hide_now()
+		_confetti.stop()
 
 
 func _on_floor_generated(columns: int, rows: int) -> void:
@@ -349,6 +366,14 @@ func _create_confetti() -> Confetti:
 	confetti.z_index = 100
 	add_child(confetti)
 	return confetti
+
+
+func _create_lobby() -> LobbyScreen:
+	var lobby := LobbyScreen.new()
+	lobby.name = "Lobby"
+	add_child(lobby)
+	move_child(lobby, _layout.get_index() + 1)
+	return lobby
 
 
 func _play_confetti(generation: int, winner_id: int) -> void:

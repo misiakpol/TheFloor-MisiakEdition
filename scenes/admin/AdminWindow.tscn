@@ -329,6 +329,42 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "Wyczyść"
 
+[node name="TvViewRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TvViewLabel" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn/TvViewRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
+text = "Ekran TV:"
+
+[node name="TvPlayersButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn/TvViewRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+tooltip_text = "Pokazuje na TV graczy z listy i ich kategorie (aktualizuje się na bieżąco)."
+toggle_mode = true
+text = "Lista graczy"
+
+[node name="TvCategoriesButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn/TvViewRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+tooltip_text = "Pokazuje na TV wszystkie kategorie do wyboru – zajęte mają kolor i imię gracza, zagrane są przygaszone."
+toggle_mode = true
+text = "Kategorie do wyboru"
+
+[node name="TvFloorButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/PlayersColumn/TvViewRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+tooltip_text = "Wraca do podłogi. Generowanie podłogi i losowanie przełączają na nią same."
+toggle_mode = true
+text = "Podłoga"
+
 [node name="SettingsColumn" type="VBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja" unique_id=1055583259]
 layout_mode = 2
 size_flags_horizontal = 3
@@ -393,6 +429,14 @@ size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
 theme_override_font_sizes/font_size = 13
 text = "Kategorie: 0"
+autowrap_mode = 3
+
+[node name="ExcludeCategoryButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryRow"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+tooltip_text = "Zaznaczona kategoria (zwykła lub finałowa) nie będzie losowana – ani graczom, ani do rundy 3. Ręcznie nadal można ją wybrać. Dwuklik na liście działa tak samo. Zapisuje się od razu."
+text = "Wyklucz z losowania"
 
 [node name="ReloadButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryRow" unique_id=682510791]
 unique_name_in_owner = true
