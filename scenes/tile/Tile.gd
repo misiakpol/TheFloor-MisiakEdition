@@ -15,10 +15,13 @@ extends Control
 ## pola w kolorze zwycięzcy, a współdzielony ShaderMaterial (radial_capture.gdshader)
 ## odsłania go tylko wewnątrz koła rosnącego ze środka pola zwycięzcy. Main animuje promień
 ## jednego materiału, więc wszystkie przejmowane pola malują się jedną, ciągłą falą.
+## Na dotychczasowych polach zwycięzcy CaptureCover (nad CaptureLayer) przykrywa ich stary
+## kształt, więc falę z jasnym czołem widać tylko na zajmowanym terenie (i w szczelinach).
 ##
 ## [codeblock]
 ## Tile (Control)              – _draw(): tło w kolorze właściciela + "mostki" do sąsiadów
 ## ├─ CaptureLayer (Control)    – kształt pola w kolorze zwycięzcy, przycinany shaderem
+## ├─ CaptureCover (Control)    – stary kształt pola zwycięzcy NAD falą (tylko jego pola)
 ## ├─ Content (MarginContainer) – podpisy (widoczne tylko na jednym polu terytorium)
 ## │  └─ VBox
 ## │     ├─ %CategoryLabel
@@ -86,6 +89,7 @@ var _capturing := false
 var _labels_wanted := false
 
 @onready var _capture_layer: Control = $CaptureLayer
+@onready var _capture_cover: Control = $CaptureCover
 @onready var _content: Control = $Content
 @onready var _category_label: Label = %CategoryLabel
 @onready var _owner_label: Label = %OwnerLabel
@@ -99,6 +103,8 @@ func _ready() -> void:
 	_capture_layer.draw.connect(
 			func() -> void: _draw_shape_with_mask(_capture_layer, _capture_color, _capture_neighbors))
 	_capture_layer.hide()
+	_capture_cover.draw.connect(func() -> void: _draw_shape(_capture_cover, fill_color))
+	_capture_cover.hide()
 	_highlight_layer.draw.connect(_draw_highlight)
 	_flash.modulate.a = 0.0
 	_highlight_layer.modulate.a = 0.0
@@ -143,6 +149,7 @@ func set_neighbors(mask: int) -> void:
 	queue_redraw()
 	_flash.queue_redraw()
 	_capture_layer.queue_redraw()
+	_capture_cover.queue_redraw()
 	_highlight_layer.queue_redraw()
 
 
@@ -212,6 +219,10 @@ func begin_capture(new_owner_name: String, new_category: String, new_color: Colo
 	_capture_layer.material = radial_material
 	_capture_layer.queue_redraw()
 	_capture_layer.show()
+	# Dotychczasowe pole zwycięzcy: jego stary kształt zostaje NAD falą (fala odsłania tylko
+	# to, co dochodzi – mostki i narożniki w stronę zajmowanego terenu).
+	_capture_cover.queue_redraw()
+	_capture_cover.visible = not is_new_tile
 
 
 ## Koniec przejęcia: kolor zostaje na stałe w tle pola, warstwa i shader znikają.
@@ -222,6 +233,7 @@ func finish_capture() -> void:
 	_capturing = false
 	_capture_layer.hide()
 	_capture_layer.material = null
+	_capture_cover.hide()
 	_content.visible = _labels_wanted
 
 

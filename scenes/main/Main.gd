@@ -286,19 +286,25 @@ func _on_territory_captured(winner_id: int, loser_id: int, tile_indices: PackedI
 	var center := _tiles[origin].get_global_rect().get_center()
 	# Promień końcowy: najdalszy narożnik przejmowanych pól (z mostkami) + czoło fali.
 	var gap := float(_grid.get_theme_constant("h_separation"))
+	# Promień początkowy: najbliższy punkt przejmowanej strefy – wewnątrz dotychczasowego
+	# terytorium fala jest przykryta (Tile.CaptureCover), więc nie tracimy tam czasu.
 	var max_radius := 0.0
+	var min_radius := INF
 	for tile_index in tile_indices:
 		var rect := _tiles[tile_index].get_global_rect().grow(gap)
 		for corner: Vector2 in [rect.position, rect.end,
 				Vector2(rect.position.x, rect.end.y), Vector2(rect.end.x, rect.position.y)]:
 			max_radius = maxf(max_radius, center.distance_to(corner))
+		var closest := center.clamp(rect.position, rect.end)
+		min_radius = minf(min_radius, center.distance_to(closest))
 	max_radius += CAPTURE_EDGE_WIDTH
+	min_radius = clampf(min_radius, 0.0, max_radius)
 
 	# JEDEN materiał dla całej strefy – wszystkie pola widzą to samo koło.
 	var radial := ShaderMaterial.new()
 	radial.shader = RADIAL_CAPTURE_SHADER
 	radial.set_shader_parameter("center", center)
-	radial.set_shader_parameter("radius", 0.0)
+	radial.set_shader_parameter("radius", min_radius)
 	radial.set_shader_parameter("edge_width", CAPTURE_EDGE_WIDTH)
 
 	# Start, gdy ekran pojedynku już zniknie.
@@ -307,7 +313,7 @@ func _on_territory_captured(winner_id: int, loser_id: int, tile_indices: PackedI
 	_capture_tween.tween_callback(_begin_radial_capture.bind(winner_id, tile_indices, radial))
 	_capture_tween.tween_method(
 			func(radius: float) -> void: radial.set_shader_parameter("radius", radius),
-			0.0, max_radius, CAPTURE_DURATION) \
+			min_radius, max_radius, CAPTURE_DURATION) \
 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	_capture_tween.tween_callback(_finish_radial_capture)
 
