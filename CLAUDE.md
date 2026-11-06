@@ -98,7 +98,7 @@ audio/music/win/*.ogg           <- muzyka zwycięstwa, ładowana w locie (.gdign
 Baza 1920×1080, stretch `canvas_items` + `expand`: tekst i kafelki są rysowane natywnie i ostre także w 4K; ostrość zdjęć zależy od plików źródłowych. Gra działa w rozdzielczości ustawionej w Windows, a przy starcie loguje ją w konsoli („Ekran gry: …”). Uwaga: `Viewport.get_texture().get_size()` zawyża wynik – prawdziwy rozmiar pokazuje zapisany PNG.
 
 ## Dokumentacja (GitHub Pages)
-- Strona: `docs/index.html` (statyczna, bez zależności, style w pliku; `docs/.nojekyll`), publikowana przez GitHub Pages z gałęzi `main`, folder `/docs` → `https://misiakpol.github.io/TheFloorAdix/`. `README.md` (UTF-8) to skrót z linkiem do strony.
+- Strona: `docs/index.html` (statyczna, bez zależności, style w pliku; `docs/.nojekyll`; `docs/.gdignore` – bez niego Godot importuje zrzuty i pakuje je do `.pck`), publikowana przez GitHub Pages z gałęzi `main`, folder `/docs` → `https://misiakpol.github.io/TheFloorAdix/`. `README.md` (UTF-8) to skrót z linkiem do strony.
 - Zrzuty w `docs/img/*.png` (1920×1080 TV, konsola, menedżer kategorii) nagrywa tymczasowy skrypt w `_smoketest/` (roster z przykładowymi imionami, `generate_floor(9, false)`, pojedynki przez `start_duel` + `resolve_duel`). Na zrzutach **nie pokazuj zdjęć z kategorii użytkownika** – do ekranu pojedynku użyj tymczasowej kategorii `.txt` i usuń ją z powłoki po nagraniu.
 - Zmieniając zasady, sterowanie, formaty kategorii lub wygląd ekranów, zaktualizuj też `docs/index.html` (i w razie potrzeby zrzuty).
 
