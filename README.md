@@ -1,8 +1,8 @@
-# The Floor – lokalna gra imprezowa na TV
+# The Floor – Misiak Edition
 
 Gra imprezowa w stylu teleturnieju *The Floor*, napisana w **Godot 4.7**. Każdy gracz zaczyna z jednym polem i jedną kategorią. Pojedynki toczą się na czas: trzeba szybciej rozpoznawać zdjęcia, utwory, filmy albo odpowiadać na pytania tekstowe. Zwycięzca przejmuje terytorium przegranego, aż cała podłoga należy do jednej osoby.
 
-**📖 Pełna dokumentacja: [misiakpol.github.io/TheFloorAdix](https://misiakpol.github.io/TheFloorAdix/)**
+**📖 Pełna dokumentacja: [misiakpol.github.io/TheFloor-MisiakEdition](https://misiakpol.github.io/TheFloor-MisiakEdition/)**
 
 ![Podłoga gry](docs/img/podloga-losowanie.png)
 
@@ -29,7 +29,7 @@ Gra imprezowa w stylu teleturnieju *The Floor*, napisana w **Godot 4.7**. Każdy
 
 ## Szybki start
 
-1. Zbuduj grę (poniżej) albo pobierz ją z zakładki [Releases](https://github.com/misiakpol/TheFloorAdix/releases), jeśli jest tam wydanie.
+1. Zbuduj grę (poniżej) albo pobierz ją z zakładki [Releases](https://github.com/misiakpol/TheFloor-MisiakEdition/releases), jeśli jest tam wydanie.
 2. Obok `The Floor.exe` utwórz foldery `kategorie/` i `kategorie final/` i dodaj do nich swoje kategorie, np.:
    ```
    kategorie/
@@ -39,7 +39,7 @@ Gra imprezowa w stylu teleturnieju *The Floor*, napisana w **Godot 4.7**. Każdy
    ```
 3. Podłącz TV jako drugi ekran w trybie „Rozszerz” i uruchom `The Floor.exe`.
 
-Opis formatów kategorii, prowadzenia gry i rozwiązania typowych problemów jest w [dokumentacji](https://misiakpol.github.io/TheFloorAdix/).
+Opis formatów kategorii, prowadzenia gry i rozwiązania typowych problemów jest w [dokumentacji](https://misiakpol.github.io/TheFloor-MisiakEdition/).
 
 ## Budowanie
 
