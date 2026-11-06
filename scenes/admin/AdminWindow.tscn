@@ -419,10 +419,11 @@ text = "Generuj Podłogę"
 [node name="Sep1" type="HSeparator" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn" unique_id=2009267364]
 layout_mode = 2
 
-[node name="CategoryRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn" unique_id=742680162]
+[node name="CategoryRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn"]
 layout_mode = 2
+theme_override_constants/separation = 10
 
-[node name="CategoryCountLabel" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryRow" unique_id=968302147]
+[node name="CategorySummaryLabel" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryRow"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -431,66 +432,12 @@ theme_override_font_sizes/font_size = 13
 text = "Kategorie: 0"
 autowrap_mode = 3
 
-[node name="ExcludeCategoryButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryRow"]
+[node name="CategoryManagerButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryRow"]
 unique_name_in_owner = true
 layout_mode = 2
-disabled = true
-tooltip_text = "Zaznaczona kategoria (zwykła lub finałowa) nie będzie losowana – ani graczom, ani do rundy 3. Ręcznie nadal można ją wybrać. Dwuklik na liście działa tak samo. Zapisuje się od razu."
-text = "Wyklucz z losowania"
-
-[node name="ReloadButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryRow" unique_id=682510791]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Ponownie skanuje folder kategorie/ (podfoldery, zdjęcia i utwory)."
-text = "Skanuj foldery"
-
-[node name="ResetPlayedButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryRow" unique_id=1096775671]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Oznacza wszystkie kategorie jako niezagrane (nowe) w tej sesji."
-text = "Odnów zagrane"
-
-[node name="CategoryLists" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn" unique_id=446065597]
-layout_mode = 2
-size_flags_vertical = 3
-theme_override_constants/separation = 8
-
-[node name="RegularBox" type="VBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryLists" unique_id=1348845153]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 4
-
-[node name="RegularTitle" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryLists/RegularBox" unique_id=537837820]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.6, 0.62, 0.8, 1)
-theme_override_font_sizes/font_size = 12
-text = "Zwykłe"
-
-[node name="CategoryList" type="ItemList" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryLists/RegularBox" unique_id=227739991]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 90)
-layout_mode = 2
-size_flags_vertical = 3
-
-[node name="FinalBox" type="VBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryLists" unique_id=1411108541]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 4
-
-[node name="FinalTitle" type="Label" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryLists/FinalBox" unique_id=1312780717]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Folder kategorie final/ – grane tylko w rundzie rozstrzygającej finału (remis 1:1)."
-mouse_filter = 1
-theme_override_colors/font_color = Color(1, 0.82, 0.4, 1)
-theme_override_font_sizes/font_size = 12
-text = "Finałowe (runda 3)"
-
-[node name="FinalCategoryList" type="ItemList" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/CategoryLists/FinalBox" unique_id=1419659452]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 90)
-layout_mode = 2
-size_flags_vertical = 3
+size_flags_vertical = 4
+tooltip_text = "Wszystkie kategorie jako kafelki: wykluczanie z losowania, skanowanie folderów, odnawianie zagranych i puli finałowej."
+text = "Menedżer kategorii…"
 
 [node name="FinalPickRow" type="HBoxContainer" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn" unique_id=323259010]
 layout_mode = 2
@@ -507,12 +454,6 @@ size_flags_horizontal = 3
 tooltip_text = "Kliknij, aby wybrać. Domyślnie losowa z folderu kategorie final/, można też zwykłą kategorię."
 alignment = 0
 clip_text = true
-
-[node name="ResetFinalPoolButton" type="Button" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn/FinalPickRow" unique_id=1307574384]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Przywraca do losowania kategorie finałowe zużyte w tej sesji."
-text = "Odnów pulę"
 
 [node name="Sep2" type="HSeparator" parent="Root/Margin/VBox/Tabs/Konfiguracja/SettingsColumn" unique_id=81699623]
 layout_mode = 2

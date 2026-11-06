@@ -18,14 +18,11 @@ const SETUP_TAB := 0
 const GAME_TAB := 1
 const QUICK_TAB := 2
 const STATS_TAB := 3
-const USED_COLOR := Color(0.5, 0.52, 0.62)
 ## Kategorie w sesji: zielona kropka = nowa (jeszcze nie grana), szara = już zagrana.
 const FRESH_DOT_COLOR := Color("06d6a0")
 const PLAYED_DOT_COLOR := Color(0.45, 0.47, 0.58)
 const PLAYED_SUFFIX := "  · zagrana"
-const EXCLUDED_PREFIX := "[wykluczona] "
 const EXCLUDED_SUFFIX := "  · wykluczona z losowania"
-const EXCLUDED_COLOR := Color(0.85, 0.45, 0.5)
 ## Kolumny tabeli rankingu: [nagłówek, wyrównanie do prawej?, klucz sortowania].
 ## "Pojedynki W/P" sortują się po liczbie wygranych.
 const RANKING_COLUMNS := [
@@ -86,20 +83,14 @@ var _synced_player_count := GameManager.MIN_PLAYERS
 @onready var _grid_preview_label: Label = %GridPreviewLabel
 @onready var _shuffle_check: CheckBox = %ShuffleCheck
 @onready var _generate_button: Button = %GenerateButton
-@onready var _category_count_label: Label = %CategoryCountLabel
-@onready var _reload_button: Button = %ReloadButton
-@onready var _category_list: ItemList = %CategoryList
-@onready var _reset_played_button: Button = %ResetPlayedButton
-@onready var _exclude_category_button: Button = %ExcludeCategoryButton
-## Kategoria zaznaczona na liście zwykłych lub finałowych (do wykluczania z losowania).
-var _list_selected_key := ""
+@onready var _category_summary_label: Label = %CategorySummaryLabel
+@onready var _category_manager_button: Button = %CategoryManagerButton
+## Okno menedżera kategorii (kafelki, wykluczenia, skanowanie) – tworzone w kodzie.
+var _category_manager_window: CategoryManagerWindow
 ## Ikonki statusu kategorii (tworzone w kodzie – bez plików graficznych).
 @onready var _fresh_icon: Texture2D = _make_dot_icon(FRESH_DOT_COLOR)
 @onready var _played_icon: Texture2D = _make_dot_icon(PLAYED_DOT_COLOR)
-@onready var _final_title: Label = %FinalTitle
-@onready var _final_category_list: ItemList = %FinalCategoryList
 @onready var _final_category_button: Button = %FinalCategoryOption
-@onready var _reset_final_pool_button: Button = %ResetFinalPoolButton
 
 # Statystyki
 @onready var _ranking_tree: Tree = %RankingTree
@@ -197,20 +188,15 @@ func _connect_ui_signals() -> void:
 
 	_player_count_spin.value_changed.connect(_on_player_count_changed)
 	_generate_button.pressed.connect(_on_generate_pressed)
-	_reload_button.pressed.connect(CategoryManager.reload)
+	_category_manager_window = CategoryManagerWindow.new()
+	add_child(_category_manager_window)
+	_category_manager_button.pressed.connect(_category_manager_window.open)
 	_category_picker = CATEGORY_PICKER_SCENE.instantiate()
 	add_child(_category_picker)
 	_category_picker.picked.connect(_on_category_picked)
 	_player_category_button.pressed.connect(_open_category_picker.bind(PickerTarget.PLAYER))
 	_final_category_button.pressed.connect(_open_category_picker.bind(PickerTarget.FINAL))
 	_quick_category_button.pressed.connect(_open_category_picker.bind(PickerTarget.QUICK))
-	_reset_final_pool_button.pressed.connect(GameManager.reset_used_final_categories)
-	_reset_played_button.pressed.connect(GameManager.reset_played_categories)
-	_exclude_category_button.pressed.connect(_toggle_selected_exclusion)
-	_category_list.item_selected.connect(_on_category_list_selected.bind(false))
-	_final_category_list.item_selected.connect(_on_category_list_selected.bind(true))
-	_category_list.item_activated.connect(func(_index: int) -> void: _toggle_selected_exclusion())
-	_final_category_list.item_activated.connect(func(_index: int) -> void: _toggle_selected_exclusion())
 	_quick_start_button.pressed.connect(_on_quick_start_pressed)
 	_reset_stats_button.pressed.connect(_on_reset_stats_pressed)
 	_random_player_button.pressed.connect(GameManager.select_random_player)
@@ -257,7 +243,7 @@ func _connect_manager_signals() -> void:
 	GameManager.duel_penalty_ticked.connect(_update_duel_phase_label.unbind(2))
 	CategoryManager.categories_loaded.connect(_on_categories_loaded)
 	CategoryManager.load_failed.connect(_on_categories_load_failed)
-	GameManager.used_final_categories_changed.connect(_populate_final_categories)
+	GameManager.used_final_categories_changed.connect(_populate_category_views)
 	GameManager.played_categories_changed.connect(_on_played_categories_changed)
 	GameManager.excluded_categories_changed.connect(_on_played_categories_changed)
 	StatsManager.stats_changed.connect(_refresh_stats)
@@ -550,81 +536,24 @@ func _refresh_player_buttons() -> void:
 	_clear_players_button.disabled = GameManager.roster.is_empty()
 
 
-## Wypełnia listę kategorii (podgląd) i listę wyboru kategorii gracza.
+## Podsumowanie kategorii w Konfiguracji (szczegóły i zarządzanie: menedżer kategorii)
+## oraz odświeżenie przycisków wyboru kategorii.
 func _populate_category_views() -> void:
-	_category_list.clear()
-
-	for category in CategoryManager.categories:
-		var category_name: String = category["name"]
-		var count_text := CategoryManager.describe_question_count(category_name)
-		var is_music: bool = category["kind"] == CategoryManager.KIND_MUSIC
-		var is_text: bool = category["kind"] == CategoryManager.KIND_TEXT
-		var played := GameManager.is_category_played(category_name)
-		var excluded := GameManager.is_category_excluded(category_name)
-		var played_text := PLAYED_SUFFIX if played else ""
-		var index := _category_list.add_item("%s%s%s — %s%s" % [
-			EXCLUDED_PREFIX if excluded else "",
-			"[muz.] " if is_music else "[tekst] " if is_text else "", category_name, count_text, played_text,
-		], _category_icon(category_name))
-		_category_list.set_item_tooltip(index, category["path"])
-		if played:
-			_category_list.set_item_custom_fg_color(index, USED_COLOR)
-			_category_list.set_item_tooltip(index, "Zagrana w tej sesji – losowanie wybierze ją dopiero, gdy zabraknie nowych.")
-		if excluded:
-			_category_list.set_item_custom_fg_color(index, EXCLUDED_COLOR)
-			_category_list.set_item_tooltip(index, "Wykluczona z losowania (dwuklik przywraca). Ręcznie nadal można ją wybrać.")
-		if category["questions"].is_empty():
-			_category_list.set_item_custom_fg_color(index, WARNING_COLOR)
-			_category_list.set_item_tooltip(index, "%s: %s" % [
-				"Plik bez pytań \"pytanie = odpowiedź\"" if is_text else "Pusty folder", category["path"],
-			])
-		elif is_music and category["background"].is_empty():
-			_category_list.set_item_tooltip(index, "Kategoria muzyczna bez obrazka tła (dodaj np. tlo.jpg).")
-
 	_select_category(_player_category_key)
-	var played_count := CategoryManager.categories.filter(
-		func(category: Dictionary) -> bool: return GameManager.is_category_played(category["name"])
-	).size()
-	_category_count_label.text = "Kategorie: %d  ·  nowe: %d  ·  zagrane: %d" % [
-		CategoryManager.categories.size(), CategoryManager.categories.size() - played_count, played_count,
+	var regular := CategoryManager.categories
+	var played := regular.filter(func(category: Dictionary) -> bool: return GameManager.is_category_played(category["name"])).size()
+	var excluded := regular.filter(func(category: Dictionary) -> bool: return GameManager.is_category_excluded(category["name"])).size()
+	var empty := regular.filter(func(category: Dictionary) -> bool: return category["questions"].is_empty()).size()
+	var text := "Kategorie: %d  ·  nowe: %d  ·  zagrane: %d" % [regular.size(), regular.size() - played, played]
+	if excluded > 0:
+		text += "  ·  wykluczone: %d" % excluded
+	if empty > 0:
+		text += "  ·  puste: %d" % empty
+	text += "\nFinałowe: %d / %d w puli rundy 3" % [
+		GameManager.get_unused_final_categories().size(), CategoryManager.final_categories.size(),
 	]
-	if not GameManager.excluded_categories.is_empty():
-		_category_count_label.text += "  ·  wykluczone: %d" % GameManager.excluded_categories.size()
-	_reset_played_button.disabled = GameManager.played_categories.is_empty()
+	_category_summary_label.text = text
 	_populate_final_categories()
-	_restore_list_selection()
-
-
-func _on_category_list_selected(index: int, is_final: bool) -> void:
-	var pool := CategoryManager.final_categories if is_final else CategoryManager.categories
-	(_category_list if is_final else _final_category_list).deselect_all()
-	_list_selected_key = pool[index]["name"] if index < pool.size() else ""
-	_refresh_exclude_button()
-
-
-func _toggle_selected_exclusion() -> void:
-	if CategoryManager.has_category(_list_selected_key):
-		GameManager.set_category_excluded(_list_selected_key,
-				not GameManager.is_category_excluded(_list_selected_key))
-
-
-## Listy są budowane od nowa – zaznaczenie wraca na tę samą kategorię.
-func _restore_list_selection() -> void:
-	for is_final: bool in [false, true]:
-		var pool := CategoryManager.final_categories if is_final else CategoryManager.categories
-		var list := _final_category_list if is_final else _category_list
-		for i in pool.size():
-			if pool[i]["name"] == _list_selected_key:
-				list.select(i)
-	if not CategoryManager.has_category(_list_selected_key):
-		_list_selected_key = ""
-	_refresh_exclude_button()
-
-
-func _refresh_exclude_button() -> void:
-	var excluded := GameManager.is_category_excluded(_list_selected_key)
-	_exclude_category_button.disabled = _list_selected_key.is_empty()
-	_exclude_category_button.text = "Przywróć do losowania" if excluded else "Wyklucz z losowania"
 
 
 func _on_played_categories_changed() -> void:
@@ -650,32 +579,9 @@ func _make_dot_icon(color: Color) -> Texture2D:
 	return ImageTexture.create_from_image(image)
 
 
-## Podgląd folderu "kategorie final" + ręczny wybór kategorii rundy rozstrzygającej.
-## Lista wyboru: losowa (domyślnie), kategorie finałowe, a na końcu zwykłe – na wszelki wypadek.
+## Wybór kategorii rundy rozstrzygającej (i szybkiego pojedynku) po zmianach kategorii.
 func _populate_final_categories() -> void:
 	_populate_quick_categories()
-	_final_category_list.clear()
-	for category in CategoryManager.final_categories:
-		var key: String = category["name"]
-		var index := _final_category_list.add_item("%s — %s" % [
-			CategoryManager.get_admin_name(key), CategoryManager.describe_question_count(key),
-		])
-		_final_category_list.set_item_tooltip(index, category["path"])
-		if category["questions"].is_empty():
-			_final_category_list.set_item_custom_fg_color(index, WARNING_COLOR)
-		elif GameManager.is_category_excluded(key):
-			_final_category_list.set_item_text(index, EXCLUDED_PREFIX + _final_category_list.get_item_text(index))
-			_final_category_list.set_item_custom_fg_color(index, EXCLUDED_COLOR)
-			_final_category_list.set_item_tooltip(index, "Wykluczona z losowania rundy 3 (dwuklik przywraca).")
-		elif GameManager.is_final_category_used(key):
-			# Zagrana już w tej sesji – nie wejdzie do losowania.
-			_final_category_list.set_item_text(index, "[zużyta] " + _final_category_list.get_item_text(index))
-			_final_category_list.set_item_custom_fg_color(index, USED_COLOR)
-			_final_category_list.set_item_tooltip(index, "Zagrana w tej sesji – pominięta w losowaniu.")
-	var unused_count := GameManager.get_unused_final_categories().size()
-	_final_title.text = "Finałowe (runda 3): %d / %d w puli" % [unused_count, CategoryManager.final_categories.size()]
-	_reset_final_pool_button.disabled = GameManager.used_final_categories.is_empty()
-
 	# Zachowaj wybór admina (np. po "Skanuj foldery"), jeśli kategoria nadal istnieje.
 	var override := GameManager.final_category_override
 	if not override.is_empty() and CategoryManager.get_questions(override).is_empty():
